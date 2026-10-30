@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Задачи</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
@@ -85,7 +86,21 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .navin{max-width:620px;margin:0 auto;height:44px;display:flex;align-items:center;justify-content:space-between;position:relative}
 .navtitle{position:absolute;left:50%;transform:translateX(-50%) translateY(6px);font-weight:600;font-size:17px;opacity:0;transition:opacity .25s,transform .35s var(--spring);pointer-events:none;white-space:nowrap}
 .nav.scrolled .navtitle{opacity:1;transform:translateX(-50%)}
-.tools{display:flex;gap:4px;margin-left:auto}
+
+/* Меню вместо дълъг ред с бутони */
+.mbtn{min-height:44px;min-width:44px;margin-left:auto;color:var(--accent);display:flex;align-items:center;justify-content:center;border-radius:12px}
+.mbtn:active{background:var(--wash)}
+.tools{display:none;position:absolute;right:0;top:46px;flex-direction:column;gap:0;min-width:236px;max-width:calc(100vw - 24px);padding:6px;border-radius:18px;background:var(--surface);box-shadow:0 12px 40px rgba(0,0,0,.28),0 0 0 .5px var(--line);z-index:60;transform-origin:top right}
+.tools.open{display:flex;animation:menuin .22s var(--spring) both}
+@keyframes menuin{from{opacity:0;transform:scale(.92) translateY(-6px)}to{opacity:1;transform:none}}
+.tools .tbtn{justify-content:flex-start;gap:14px;width:100%;min-height:46px;padding:0 12px;font-size:16px;color:var(--ink);border-radius:12px}
+.tools .tbtn svg{color:var(--accent);flex:none}
+.tools .tbtn::after{content:attr(title);font-weight:500}
+.tools #spread::after{content:none}
+.tools #spread{color:var(--accent);font-weight:500}
+.menuback{position:fixed;inset:0;z-index:55;display:none}
+.menuback.open{display:block}
+
 .tbtn{min-height:44px;min-width:44px;padding:0 10px;color:var(--accent);font-size:17px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:12px}
 .tbtn:active{background:var(--wash)}
 a.tbtn{text-decoration:none}
@@ -432,19 +447,21 @@ textarea.fin{height:auto;min-height:110px;padding:12px 14px;resize:none;line-hei
 <header class="nav" id="nav">
   <div class="navin">
     <span class="navtitle">Задачи</span>
-    <div class="tools">
-      <button class="tbtn" id="spread" title="Раздели задачите без дата по следващите дни">Разпредели</button>
+    <button class="mbtn" id="mbtn" aria-label="Меню" aria-expanded="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="19" cy="12" r="1.2" fill="currentColor"/></svg></button>
+    <div class="menuback" id="menuback"></div>
+    <div class="tools" id="tools">
+      <button class="tbtn" id="spread" title="Разпредели задачите без дата">Разпредели</button>
       <button class="tbtn" id="hbtn" aria-label="Часове Ред Хот" title="Часове Ред Хот">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       </button>
-      <a class="tbtn" id="notes" href="mobilenotes://" aria-label="Копирай и отвори Бележки" title="Копирай задачите и отвори Бележки">
+      <a class="tbtn" id="notes" href="mobilenotes://" aria-label="Копирай и отвори Бележки" title="Копирай в Бележки">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
       </a>
       <button class="tbtn" id="impbtn" aria-label="Импорт на данни" title="Импорт на данни">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
       </button>
       <input type="file" id="impfile" accept="application/json,.json" hidden>
-      <button class="tbtn" id="nbtn" aria-label="Тест известие" title="Тест известие">
+      <button class="tbtn" id="nbtn" aria-label="Включи известията" title="Включи известията">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
       </button>
       <button class="tbtn" id="palbtn" aria-label="Цветове" title="Цветове">
@@ -1830,6 +1847,13 @@ setInterval(function(){checkReminders(false);},15000);
 var lastDay=iso(new Date());
 document.addEventListener('visibilitychange',function(){ if(!document.hidden){ var nd2=iso(new Date()); if(nd2!==lastDay){ if(selDate===lastDay) selDate=nd2; lastDay=nd2; } render(); checkReminders(false); } });
 
+(function(){
+  var mb=document.getElementById('mbtn'), tl=document.getElementById('tools'), bk=document.getElementById('menuback');
+  function setMenu(o){ tl.classList.toggle('open',o); bk.classList.toggle('open',o); mb.setAttribute('aria-expanded',String(o)); }
+  mb.addEventListener('click',function(e){ e.stopPropagation(); setMenu(!tl.classList.contains('open')); });
+  bk.addEventListener('click',function(){ setMenu(false); });
+  tl.addEventListener('click',function(){ setTimeout(function(){ setMenu(false); },0); });
+})();
 initStore();
 })();
 </script>
