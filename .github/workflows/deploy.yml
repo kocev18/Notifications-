@@ -62,7 +62,7 @@ jobs:
       name: github-pages
     steps:
       - uses: actions/checkout@v4
-      - run: mkdir site && cp index.html sw.js manifest.webmanifest icon-*.png site/
+      - run: mkdir site && cp index.html sw.js manifest.webmanifest icon*.png site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
