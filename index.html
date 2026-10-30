@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <title>Задачи</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon2-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,6 +23,8 @@ window.claude={use:async function(n){
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
+html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+input,textarea,select{font-size:16px!important}
 /* Layout: iOS-style. Frosted nav bar, large collapsing title, inset grouped lists, floating glass input bar. */
 :root{
   --gl:max(16px,env(safe-area-inset-left,0px)); --gr:max(16px,env(safe-area-inset-right,0px));
@@ -1889,6 +1891,9 @@ document.addEventListener('visibilitychange',function(){ if(!document.hidden){ v
   bk.addEventListener('click',function(){ setMenu(false); });
   tl.addEventListener('click',function(){ setTimeout(function(){ setMenu(false); },0); });
 })();
+['gesturestart','gesturechange','gestureend'].forEach(function(ev){ document.addEventListener(ev,function(e){ e.preventDefault(); },{passive:false}); });
+var lastTouchEnd=0; document.addEventListener('touchend',function(e){ var n=Date.now(); if(n-lastTouchEnd<=300) e.preventDefault(); lastTouchEnd=n; },{passive:false});
+document.addEventListener('touchmove',function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); },{passive:false});
 initStore();
 })();
 </script>
