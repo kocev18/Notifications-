@@ -1081,7 +1081,6 @@ function checkReminders(silent){
     var key=t.date+'T'+(t.time||''); if(t.rem===key) return;
     t.rem=key; changed=true;
     if(now-due<2*3600*1000){ if(alerts.indexOf(t.id)<0) alerts.push(t.id); fired=true;
-      try{ if(window.Notification&&Notification.permission==='granted') new Notification('Задача',{body:t.title}); }catch(e){}
     }
   });
   if(changed) persist();
@@ -1894,6 +1893,9 @@ document.addEventListener('visibilitychange',function(){ if(!document.hidden){ v
 ['gesturestart','gesturechange','gestureend'].forEach(function(ev){ document.addEventListener(ev,function(e){ e.preventDefault(); },{passive:false}); });
 var lastTouchEnd=0; document.addEventListener('touchend',function(e){ var n=Date.now(); if(n-lastTouchEnd<=300) e.preventDefault(); lastTouchEnd=n; },{passive:false});
 document.addEventListener('touchmove',function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); },{passive:false});
+function showTaskAlert(id){ if(!id) return; var t=tasks.find(function(x){return x.id===id;}); if(!t||t.done) return; if(alerts.indexOf(id)<0) alerts.push(id); renderAlerts(); }
+try{ var qp=new URLSearchParams(location.search).get('t'); if(qp){ setTimeout(function(){ showTaskAlert(qp); },1500); history.replaceState(null,'',location.pathname); } }catch(e){}
+if('serviceWorker' in navigator){ navigator.serviceWorker.addEventListener('message',function(ev){ if(ev.data&&ev.data.openTask){ pull(false); setTimeout(function(){ showTaskAlert(ev.data.openTask); },600); } }); }
 initStore();
 })();
 </script>

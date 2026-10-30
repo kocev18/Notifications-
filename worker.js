@@ -69,7 +69,7 @@ async function runDue(env) {
     const late = minutesBetween(now, t.date + ' ' + t.time);
     if (late < 0 || late > 90) continue;
     const em = t.prio === 3 ? '🔴' : t.prio === 2 ? '🟡' : '🟢';
-    const r = await sendPush(env, sub, { title: '📋 Задачи', body: em + ' ' + t.time + ' · ' + t.title, tag: t.id, url: './' });
+    const r = await sendPush(env, sub, { title: '📋 Задачи', body: em + ' ' + t.time + ' · ' + t.title, tag: t.id, url: './?t=' + encodeURIComponent(t.id) });
     if (r.status === 404 || r.status === 410) { await env.KV.delete('sub'); break; }
     if (r.status < 300) { sent[key] = Date.now(); n++; changed = true; }
   }

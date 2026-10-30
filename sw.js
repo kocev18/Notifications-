@@ -6,9 +6,10 @@ self.addEventListener('push',function(e){
 });
 self.addEventListener('notificationclick',function(e){
   e.notification.close();
+  var url=(e.notification.data&&e.notification.data.url)||'./', m=/[?&]t=([^&]+)/.exec(url), id=m?decodeURIComponent(m[1]):null;
   e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(function(l){
-    for(var i=0;i<l.length;i++){ if('focus' in l[i]) return l[i].focus(); }
-    return self.clients.openWindow('./');
+    for(var i=0;i<l.length;i++){ if('focus' in l[i]){ l[i].postMessage({openTask:id}); return l[i].focus(); } }
+    return self.clients.openWindow(url);
   }));
 });
 self.addEventListener('fetch',function(e){
