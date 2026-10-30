@@ -629,7 +629,7 @@ var CFG={api:'',token:''}, rev=0, pullTimer=null;
 try{ var c0=JSON.parse(localStorage.getItem('zadachi.cfg')||'{}'); if(c0.api) CFG=c0; }catch(e){}
 function api(path,opt){
   opt=opt||{}; opt.headers=Object.assign({'Authorization':'Bearer '+CFG.token},opt.headers||{});
-  return fetch(CFG.api.replace(/\/+$/,'')+path,opt).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+  return fetch(CFG.api.replace(/\/+$/,'')+path,opt).then(function(r){ if(r.status===401){ try{localStorage.removeItem('zadachi.cfg');}catch(e){} CFG={api:CFG.api,token:''}; setTimeout(function(){ toast('Грешна парола. Въведи я отново.'); if(setupServer()) pull(true); },300); } if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
 }
 function snapshot(){ return {tasks:clone(tasks),hours:clone(hours),cars:clone(cars),checks:clone(checks),plans:clone(plans),docs:clone(docs),farm:clone(farm),ideas:clone(ideas),sched:clone(sched),hdone:clone(hdone),ui:clone(ui),v:10}; }
 function flush(){
