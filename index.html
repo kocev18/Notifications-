@@ -261,7 +261,10 @@ textarea.fin{height:auto;min-height:110px;padding:12px 14px;resize:none;line-hei
 .sdh{text-align:center;display:grid;align-content:center;line-height:1.15;padding:6px 0;background:#9A9A9A;color:#111;border-radius:6px}
 .sdh b{font-size:17px}.sdh span{font-size:10.5px;font-weight:600}
 .sdn{font-size:11px;font-weight:700;grid-row:span 2}
-.swl{grid-row:auto;font-size:10.5px}
+.wxbar{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin:0 0 12px;padding:8px 6px;border-radius:14px;background:var(--wash);position:relative}
+.wxt{position:absolute;top:-8px;left:12px;font-size:11px;font-weight:700;background:var(--surface);color:var(--muted);padding:0 6px;border-radius:6px}
+.wxd{display:grid;justify-items:center;gap:1px;line-height:1.15;font-size:10px;font-weight:700;color:var(--ink)}
+.wxd .wd{color:var(--muted);font-weight:700}.wxd b{font-size:20px}.wxd .rn{color:#1A6FD4}
 .swx{background:#C9D6E8;padding:4px 0;gap:1px}
 .swx b{font-size:20px;line-height:1.1}.swx span{font-size:10px;font-weight:700}.swx .rn{color:#1A5FB4}
 .smonth{grid-column:1/-1;text-align:center;background:#9A9A9A;color:#111;font-size:17px;font-weight:800;padding:9px 0;border-radius:6px}
@@ -1656,7 +1659,6 @@ function schedPanel(){
   var head='<div class="grab"></div><h3>График</h3><div class="hhead"><strong>'+weekLabel(sWeek)+'</strong><div style="display:flex"><button class="cbtn" data-sw="-7" aria-label="Предишна седмица">'+l+'</button><button class="cbtn" data-sw="7" aria-label="Следваща седмица">'+r+'</button></div></div>';
   var conflicts=[];
   var grid='<div class="sgrid"><div class="smonth">'+esc(monthLabel(sWeek))+'</div><div class="sdh sdn">Име / Дата</div>'+SDN.map(function(n,i){var d=addDays(mon,i);return '<div class="sdh sdd'+(holOf(iso(d)).length?' hol':'')+'">'+d.getDate()+'</div>';}).join('')+SDN.map(function(n,i){return '<div class="sdh sdw">'+SDS[i]+'</div>';}).join('')+
-    '<div class="sdh sdn swl">Варна</div>'+SDN.map(function(n,i){return wxCell(iso(addDays(mon,i)));}).join('')+
     sched.people.map(function(p){
       return '<div class="snc"><input class="sn" data-pn="'+p.id+'" value="'+esc(p.name)+'" aria-label="Име">'+(sEdit?'<button type="button" class="sx" data-px="'+p.id+'" aria-label="Премахни">×</button>':'')+'</div>'+
         SDN.map(function(n,i){ var v=sCell(p.id,i);
@@ -1667,7 +1669,9 @@ function schedPanel(){
   var legend='<div class="slg">'+sched.cars.map(function(c){return '<span style="background:'+c.c+';color:'+c.k+'">'+esc(c.n)+'</span>';}).join('')+'<span style="background:#666;color:#ddd">Почивен</span></div>';
   var hw=holWeek(sWeek), hbanner=hw.length?'<div class="shol">'+hw.map(function(x){ return '<span><b>'+SDS[x.i]+' '+fromIso(x.k).getDate()+'.'+pad(fromIso(x.k).getMonth()+1)+'</b> · '+esc(x.h.n)+(x.h.busy?' — очаквай повече хора':'')+'</span>'; }).join('')+'</div>':'';
   var cbanner=conflicts.length?'<div class="scw"><b>⚠ За проверка:</b>'+conflicts.map(function(x){return '<span>'+esc(x)+'</span>';}).join('')+'</div>':'';
-  sh.innerHTML=head+hbanner+cbanner+'<div class="swrap">'+grid+'</div>'+legend+
+  var wxbar='<div class="wxbar" aria-label="Времето във Варна"><div class="wxt">Варна</div>'+SDN.map(function(n,i){ var k=iso(addDays(mon,i)), w=WX[k], ic=w?wxIcon(w.c):null;
+    return '<div class="wxd"'+(ic?' title="'+esc(ic[1])+'"':'')+'><span class="wd">'+SDS[i]+'</span>'+(w?'<b>'+ic[0]+'</b><span>'+w.hi+'°/'+w.lo+'°</span><span class="rn">💧'+(w.p!=null?w.p:'–')+'%</span>':'<span>—</span>')+'</div>'; }).join('')+'</div>';
+  sh.innerHTML=head.replace('<h3>График</h3>','<h3>График</h3>'+wxbar)+hbanner+cbanner+'<div class="swrap">'+grid+'</div>'+legend+
     '<div class="acts"><button class="btn" id="s-add" type="button" style="flex:1">+ Човек</button><button class="btn" id="s-edit" type="button" style="flex:1">'+(sEdit?'Готово с хората':'Махни човек')+'</button></div>'+
     '<div class="acts"><button class="btn" id="s-prev" type="button" style="flex:1">Копирай от миналата седмица</button></div>'+
     '<div class="acts big"><button class="btn pri" id="s-jpg" type="button" style="flex:1">Запази като снимка</button><button class="btn" id="s-copy" type="button" style="flex:1">Копирай снимка</button></div>'+
@@ -1730,7 +1734,7 @@ function schedCell(pid,i){
 }
 function schedBlob(type){
   return new Promise(function(res,rej){
-    var W=1400, nameW=190, colW=(W-nameW)/7, monthH=84, dateH=76, dayH=54, wxH=96, headH=monthH+dateH+dayH+wxH, rowH=104, legH=84, n=sched.people.length, hw0=holWeek(sWeek), holH=hw0.length?(hw0.length*44+30):0, H=headH+n*rowH+legH+holH;
+    var W=1400, nameW=190, colW=(W-nameW)/7, monthH=84, dateH=76, dayH=54, headH=monthH+dateH+dayH, rowH=104, legH=84, n=sched.people.length, hw0=holWeek(sWeek), holH=hw0.length?(hw0.length*44+30):0, H=headH+n*rowH+legH+holH;
     var cv=document.createElement('canvas'); cv.width=W; cv.height=H; var c=cv.getContext('2d');
     var F='-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif';
     c.fillStyle='#000'; c.fillRect(0,0,W,H); c.textBaseline='middle'; c.textAlign='center';
@@ -1740,10 +1744,8 @@ function schedBlob(type){
     box(0,monthH,nameW,dateH+dayH,'#9A9A9A'); c.fillStyle='#111'; c.font='700 28px '+F; c.fillText('Име / Дата',nameW/2,monthH+(dateH+dayH)/2);
     for(var i=0;i<7;i++){ var d=addDays(fromIso(sWeek),i), x=nameW+colW*i;
       box(x,monthH,colW,dateH,'#9A9A9A'); c.fillStyle='#111'; c.font='800 52px '+F; c.fillText(String(d.getDate()),x+colW/2,monthH+dateH/2);
-      box(x,monthH+dateH,colW,dayH,'#B8B8B8'); c.fillStyle='#111'; c.font='700 27px '+F; c.fillText(SDN[i],x+colW/2,monthH+dateH+dayH/2);
-      var wy=monthH+dateH+dayH, w=WX[iso(d)]; box(x,wy,colW,wxH,'#C9D6E8');
-      if(w){ c.fillStyle='#111'; c.font='34px '+F; c.fillText(wxIcon(w.c)[0],x+colW/2,wy+26); c.font='700 24px '+F; c.fillText(w.hi+'°/'+w.lo+'°',x+colW/2,wy+58); c.fillStyle='#1A5FB4'; c.font='700 21px '+F; c.fillText(w.p!=null?w.p+'% дъжд':'',x+colW/2,wy+82); } }
-    box(0,monthH+dateH+dayH,nameW,wxH,'#C9D6E8'); c.fillStyle='#111'; c.font='700 26px '+F; c.fillText('Варна',nameW/2,monthH+dateH+dayH+wxH/2);
+      box(x,monthH+dateH,colW,dayH,'#B8B8B8'); c.fillStyle='#111'; c.font='700 27px '+F; c.fillText(SDN[i],x+colW/2,monthH+dateH+dayH/2); }
+
     sched.people.forEach(function(p,ri){
       var y=headH+ri*rowH; box(0,y,nameW,rowH,'#82B36B'); c.fillStyle='#111'; c.font='700 30px '+F; c.fillText(fit(p.name,nameW-20),nameW/2,y+rowH/2);
       for(var i=0;i<7;i++){ var v=sCell(p.id,i), car=sCar(v.c), x=nameW+colW*i;
