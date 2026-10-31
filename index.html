@@ -1869,18 +1869,19 @@ function spendPanel(){
   sh.innerHTML='<div class="grab"></div><h3>Разходи</h3>'+
     '<div class="hhead"><strong>'+esc(longDate(spDate))+'</strong><div style="display:flex"><button class="cbtn" data-sd="-1" aria-label="Предишен ден">'+l+'</button><button class="cbtn" data-sd="1" aria-label="Следващ ден">'+r+'</button></div></div>'+
     '<div class="sprow2"><div class="fl" style="margin:0"><label for="sp-n">За какво (по желание)</label><input class="fin" id="sp-n" type="text" placeholder="напр. гориво"></div>'+
-    '<div class="fl" style="margin:0"><label for="sp-a">Сума</label><input class="fin" id="sp-a" type="text" inputmode="text" autocomplete="off" placeholder="12.5+8"></div></div>'+
-    '<p class="note" id="sp-p" style="margin:6px 2px 10px">Можеш да пишеш и пресмятане: 12.5+8*2</p>'+
-    '<div class="acts big"><button class="btn pri" id="sp-add" type="button" style="flex:1">Добави</button></div>'+
+    '<div class="fl" style="margin:0"><label for="sp-a">Сума</label><input class="fin" id="sp-a" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="0.00"></div></div>'+
+    '<p class="note" id="sp-p" style="margin:6px 2px 10px">Само число. С бутона „+“ събираш няколко суми.</p>'+
+    '<div class="acts big"><button class="btn" id="sp-plus" type="button" style="flex:0 0 64px;font-size:26px" aria-label="Събери със следваща сума">+</button><button class="btn pri" id="sp-add" type="button" style="flex:1">Добави</button></div>'+
     (day.length?day.map(function(x){ return '<div class="sprow" data-id="'+x.id+'"><span class="sn2">'+esc(x.note||'Разход')+'</span><span class="sa">'+spMoney(x.amt)+'</span><button type="button" class="sd" data-del="'+x.id+'" aria-label="Изтрий">×</button></div>'; }).join(''):'<p class="note">За този ден още няма записани разходи.</p>')+
     '<div class="sptot"><span class="big">За деня</span><b class="big">'+spMoney(spSum(day))+'</b><span>За седмицата</span><b>'+spMoney(week)+'</b><span>За месеца</span><b>'+spMoney(month)+'</b></div>'+
     '<div class="acts"><button class="btn" id="sp-close" type="button" style="flex:1">Затвори</button></div>';
   $('#sp-close').onclick=closeSheet;
   sh.querySelectorAll('[data-sd]').forEach(function(b){ b.onclick=function(){ spDate=iso(addDays(fromIso(spDate),+b.dataset.sd)); spendPanel(); }; });
   sh.querySelectorAll('[data-del]').forEach(function(b){ b.onclick=function(){ var snap=clone(spend[spDate]||[]); spend[spDate]=(spend[spDate]||[]).filter(function(x){return x.id!==b.dataset.del;}); if(!spend[spDate].length) delete spend[spDate]; persist(); spendPanel(); toast('Изтрито','Отмени',function(){ spend[spDate]=snap; persist(); if(!$('#scrim').hidden) spendPanel(); }); }; });
-  var ai=$('#sp-a'); ai.addEventListener('input',function(){ var v=spCalc(ai.value); $('#sp-p').textContent=ai.value.trim()?(v===null?'Не разбирам сумата':'= '+spMoney(v)):'Можеш да пишеш и пресмятане: 12.5+8*2'; });
+  var ai=$('#sp-a'); ai.addEventListener('input',function(){ var v=spCalc(ai.value); $('#sp-p').textContent=ai.value.trim()?(v===null?'Не разбирам сумата':'= '+spMoney(v)):'Само число. С бутона „+“ събираш няколко суми.'; });
   function add(){ var v=spCalc(ai.value); if(v===null||v<=0){ toast('Въведи сума, например 12.50'); return; }
     (spend[spDate]=spend[spDate]||[]).push({id:rid(),amt:v,note:$('#sp-n').value.trim(),at:Date.now()}); persist(); spendPanel(); toast('Записано · '+spMoney(v)); try{ $('#sp-n').focus(); }catch(e){} }
+  $('#sp-plus').onclick=function(){ var v=ai.value.trim(); if(v&&!/[+\-*/]$/.test(v)){ ai.value=v+'+'; ai.dispatchEvent(new Event('input')); } ai.focus(); };
   $('#sp-add').onclick=add; ai.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); add(); } });
 }
 function openSpend(){
