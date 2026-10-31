@@ -263,6 +263,11 @@ textarea.fin{height:auto;min-height:110px;padding:12px 14px;resize:none;line-hei
 .sdh{text-align:center;display:grid;align-content:center;line-height:1.15;padding:6px 0;background:#9A9A9A;color:#111;border-radius:6px}
 .sdh b{font-size:17px}.sdh span{font-size:10.5px;font-weight:600}
 .sdn{font-size:11px;font-weight:700;grid-row:span 2}
+.spc{display:inline-flex;align-items:center;gap:5px;padding:8px 12px;border-radius:999px;background:var(--wash);color:var(--ink);font-size:15px;font-weight:500;white-space:nowrap}
+.spc[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.spc.rec:not([aria-pressed=true]){box-shadow:inset 0 0 0 1.5px var(--accent)}
+.spcs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.spcat{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;font-size:15px;margin:2px 0 8px;padding:0 4px}
 .sprow{display:flex;align-items:center;gap:10px;padding:11px 4px;border-top:.5px solid var(--line);font-size:16px}
 .sprow .sn2{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sprow .sa{font-weight:700;font-variant-numeric:tabular-nums}
@@ -1852,6 +1857,22 @@ function ideasPanel(){
 }
 
 /* ---------- Разходи ---------- */
+var SPCATS=[
+ {n:'Гориво',e:'⛽',re:/гориво|бензин|дизел|газ\b|метан|зареждане|лукойл|ека\b|шел|петрол|омв/i},
+ {n:'Магазин',e:'🛒',re:/магазин|храна|продукти|кауфланд|лидл|билла|фантастико|т-маркет|хляб|мляко|супермаркет|пазар/i},
+ {n:'Ресторант',e:'🍽️',re:/ресторант|вечеря|обяд|закуска|пица|бургер|дюнер|храна навън|механа|суши|кухня/i},
+ {n:'Кафе',e:'☕',re:/кафе|капучино|чай\b|напитк|сок\b|бира|бар\b|коктейл|вино/i},
+ {n:'Излизане',e:'🎉',re:/излизане|кино|клуб|концерт|билет|театър|дискотека|парти|забавлени/i},
+ {n:'Сметки',e:'🧾',re:/ток\b|вода|интернет|наем|телефон|сметка|данък|такса|абонамент|топлофикация/i},
+ {n:'Автомобил',e:'🚗',re:/масло|гума|гуми|сервиз|застраховка|винетка|паркинг|мивка|автомобил|кола|части/i},
+ {n:'Дрехи',e:'👕',re:/дрехи|обувки|яке|панталон|тениск|маратонки|облекло/i},
+ {n:'Здраве',e:'💊',re:/аптека|лекарств|лекар|зъболекар|преглед|витамин/i},
+ {n:'Подарък',e:'🎁',re:/подарък|цветя|рожден|празник/i},
+ {n:'Друго',e:'📦',re:/$^/}
+];
+var spCat=null, spManual=false;
+function spGuess(t){ t=String(t||''); for(var i=0;i<SPCATS.length-1;i++) if(SPCATS[i].re.test(t)) return SPCATS[i].n; return null; }
+function spE(n){ var c=SPCATS.find(function(x){return x.n===n;}); return c?c.e:'📦'; }
 function spCalc(str){
   str=String(str||'').replace(/,/g,'.').replace(/лв\.?/gi,'').replace(/[×x]/g,'*').replace(/[÷]/g,'/').trim();
   if(!str||!/^[0-9+\-*/().\s]+$/.test(str)) return null;
@@ -1866,26 +1887,33 @@ function spendPanel(){
   var day=spend[spDate]||[], dt=fromIso(spDate);
   var month=0, week=0, mk=spDate.slice(0,7), wk=mondayOf(spDate), wks=[]; for(var i=0;i<7;i++) wks.push(iso(addDays(fromIso(wk),i)));
   Object.keys(spend).forEach(function(k){ var t=spSum(spend[k]); if(k.slice(0,7)===mk) month+=t; if(wks.indexOf(k)>=0) week+=t; });
+  var byc={}; Object.keys(spend).forEach(function(k){ if(k.slice(0,7)===mk) (spend[k]||[]).forEach(function(x){ var c=x.cat||'Друго'; byc[c]=(byc[c]||0)+x.amt; }); });
+  var catRows=Object.keys(byc).sort(function(a,b){return byc[b]-byc[a];}).map(function(c){ return '<span>'+spE(c)+'</span><span>'+esc(c)+'</span><b>'+spMoney(byc[c])+'</b>'; }).join('');
   sh.innerHTML='<div class="grab"></div><h3>Разходи</h3>'+
     '<div class="hhead"><strong>'+esc(longDate(spDate))+'</strong><div style="display:flex"><button class="cbtn" data-sd="-1" aria-label="Предишен ден">'+l+'</button><button class="cbtn" data-sd="1" aria-label="Следващ ден">'+r+'</button></div></div>'+
     '<div class="sprow2"><div class="fl" style="margin:0"><label for="sp-n">За какво (по желание)</label><input class="fin" id="sp-n" type="text" placeholder="напр. гориво"></div>'+
     '<div class="fl" style="margin:0"><label for="sp-a">Сума</label><input class="fin" id="sp-a" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="0.00"></div></div>'+
+    '<div class="fl" style="margin:12px 0 0"><label>Категория <span id="sp-rec" style="color:var(--accent)"></span></label></div><div class="spcs" id="sp-cats">'+SPCATS.map(function(c){ return '<button type="button" class="spc" data-cat="'+c.n+'" aria-pressed="false">'+c.e+' '+c.n+'</button>'; }).join('')+'</div>'+
     '<p class="note" id="sp-p" style="margin:6px 2px 10px">Само число. С бутона „+“ събираш няколко суми.</p>'+
     '<div class="acts big"><button class="btn" id="sp-plus" type="button" style="flex:0 0 64px;font-size:26px" aria-label="Събери със следваща сума">+</button><button class="btn pri" id="sp-add" type="button" style="flex:1">Добави</button></div>'+
-    (day.length?day.map(function(x){ return '<div class="sprow" data-id="'+x.id+'"><span class="sn2">'+esc(x.note||'Разход')+'</span><span class="sa">'+spMoney(x.amt)+'</span><button type="button" class="sd" data-del="'+x.id+'" aria-label="Изтрий">×</button></div>'; }).join(''):'<p class="note">За този ден още няма записани разходи.</p>')+
+    (day.length?day.map(function(x){ return '<div class="sprow" data-id="'+x.id+'"><span class="sn2">'+spE(x.cat)+' '+esc(x.note||x.cat||'Разход')+'</span><span class="sa">'+spMoney(x.amt)+'</span><button type="button" class="sd" data-del="'+x.id+'" aria-label="Изтрий">×</button></div>'; }).join(''):'<p class="note">За този ден още няма записани разходи.</p>')+
     '<div class="sptot"><span class="big">За деня</span><b class="big">'+spMoney(spSum(day))+'</b><span>За седмицата</span><b>'+spMoney(week)+'</b><span>За месеца</span><b>'+spMoney(month)+'</b></div>'+
+    (catRows?'<div class="mh"><strong>По категории · месеца</strong></div><div class="spcat">'+catRows+'</div>':'')+
     '<div class="acts"><button class="btn" id="sp-close" type="button" style="flex:1">Затвори</button></div>';
   $('#sp-close').onclick=closeSheet;
+  function paintCats(){ var g=spManual?null:spGuess($('#sp-n').value); if(!spManual) spCat=g; sh.querySelectorAll('.spc').forEach(function(b){ b.setAttribute('aria-pressed',String(b.dataset.cat===spCat)); b.classList.toggle('rec',!spManual&&b.dataset.cat===g); }); $('#sp-rec').textContent=(!spManual&&g)?'· препоръчана':''; }
+  sh.querySelectorAll('.spc').forEach(function(b){ b.onclick=function(){ if(spManual&&spCat===b.dataset.cat){ spManual=false; } else { spManual=true; spCat=b.dataset.cat; } paintCats(); }; });
+  $('#sp-n').addEventListener('input',paintCats); paintCats();
   sh.querySelectorAll('[data-sd]').forEach(function(b){ b.onclick=function(){ spDate=iso(addDays(fromIso(spDate),+b.dataset.sd)); spendPanel(); }; });
   sh.querySelectorAll('[data-del]').forEach(function(b){ b.onclick=function(){ var snap=clone(spend[spDate]||[]); spend[spDate]=(spend[spDate]||[]).filter(function(x){return x.id!==b.dataset.del;}); if(!spend[spDate].length) delete spend[spDate]; persist(); spendPanel(); toast('Изтрито','Отмени',function(){ spend[spDate]=snap; persist(); if(!$('#scrim').hidden) spendPanel(); }); }; });
   var ai=$('#sp-a'); ai.addEventListener('input',function(){ var v=spCalc(ai.value); $('#sp-p').textContent=ai.value.trim()?(v===null?'Не разбирам сумата':'= '+spMoney(v)):'Само число. С бутона „+“ събираш няколко суми.'; });
   function add(){ var v=spCalc(ai.value); if(v===null||v<=0){ toast('Въведи сума, например 12.50'); return; }
-    (spend[spDate]=spend[spDate]||[]).push({id:rid(),amt:v,note:$('#sp-n').value.trim(),at:Date.now()}); persist(); spendPanel(); toast('Записано · '+spMoney(v)); try{ $('#sp-n').focus(); }catch(e){} }
+    var nt=$('#sp-n').value.trim(); (spend[spDate]=spend[spDate]||[]).push({id:rid(),amt:v,note:nt,cat:spCat||spGuess(nt)||'Друго',at:Date.now()}); spManual=false; spCat=null; persist(); spendPanel(); toast('Записано · '+spMoney(v)); try{ $('#sp-n').focus(); }catch(e){} }
   $('#sp-plus').onclick=function(){ var v=ai.value.trim(); if(v&&!/[+\-*/]$/.test(v)){ ai.value=v+'+'; ai.dispatchEvent(new Event('input')); } ai.focus(); };
   $('#sp-add').onclick=add; ai.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); add(); } });
 }
 function openSpend(){
-  spDate=iso(new Date());
+  spDate=iso(new Date()); spManual=false; spCat=null;
   var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.remove('side');
   sc.innerHTML='<div class="sheet" role="dialog" aria-label="Разходи"></div>'; spendPanel();
 }
