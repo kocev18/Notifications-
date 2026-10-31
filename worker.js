@@ -57,6 +57,9 @@ function nowSofia() {
 }
 const minutesBetween = (a, b) => (Date.parse(a.replace(' ', 'T') + ':00Z') - Date.parse(b.replace(' ', 'T') + ':00Z')) / 60000;
 
+const yday = (d) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd - 1)).toISOString().slice(0, 10); };
+const spTxt = (st, d) => { const a = (st.spend && st.spend[d]) || []; const t = a.reduce((s, x) => s + x.amt, 0); return a.length ? ' (вече: ' + t.toFixed(2) + ' лв)' : ''; };
+
 async function runDue(env) {
   const [stRaw, subRaw, sentRaw] = await Promise.all([env.KV.get('state'), env.KV.get('sub'), env.KV.get('sent')]);
   if (!stRaw || !subRaw) return { sent: 0 };
@@ -81,6 +84,8 @@ async function runDue(env) {
     { id: 'hours', at: '22:00', on: !hoursDone, body: '🟡 22:00 · Часове Ред Хот – въведи часовете за днес' },
     { id: 'oil', at: '10:00', on: dow === 1, body: '🟡 10:00 · Проверка масло и антифриз' },
     { id: 'sched', at: '10:00', on: dow === 0, body: '🟡 10:00 · График – напиши графика във Viber групите' },
+    { id: 'sp8', at: '08:00', on: true, body: '🟡 08:00 · Разходи – запиши колко похарчи вчера' + spTxt(state, yday(date)) },
+    { id: 'sp22', at: '22:00', on: true, body: '🟡 22:00 · Разходи – запиши колко похарчи днес' + spTxt(state, date) },
     { id: 'andrea', at: '10:00', on: dd === 30 || (mm === 2 && dd === lastFeb), body: '🟡 10:00 · Честити на Андреа' },
   ];
   for (const r of rules) {
