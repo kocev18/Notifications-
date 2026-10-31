@@ -73,6 +73,25 @@ async function runDue(env) {
     if (r.status === 404 || r.status === 410) { await env.KV.delete('sub'); break; }
     if (r.status < 300) { sent[key] = Date.now(); n++; changed = true; }
   }
+  // Редовни напомняния (вместо тези от Reminders)
+  const date = now.slice(0, 10), hhmm = now.slice(11), [yy, mm, dd] = date.split('-').map(Number);
+  const dow = new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay(), lastFeb = new Date(Date.UTC(yy, 2, 0)).getUTCDate();
+  const hoursDone = (state.hours && state.hours[date]) || (state.hdone && state.hdone[date]);
+  const rules = [
+    { id: 'hours', at: '22:00', on: !hoursDone, body: '🟡 22:00 · Часове Ред Хот – въведи часовете за днес' },
+    { id: 'oil', at: '10:00', on: dow === 1, body: '🟡 10:00 · Проверка масло и антифриз' },
+    { id: 'sched', at: '10:00', on: dow === 0, body: '🟡 10:00 · График – напиши графика във Viber групите' },
+    { id: 'andrea', at: '10:00', on: dd === 30 || (mm === 2 && dd === lastFeb), body: '🟡 10:00 · Честити на Андреа' },
+  ];
+  for (const r of rules) {
+    const key = 'rule:' + r.id + '|' + date;
+    if (!r.on || sent[key]) continue;
+    const late = minutesBetween(now, date + ' ' + r.at);
+    if (late < 0 || late > 90) continue;
+    const x = await sendPush(env, sub, { title: '📋 Задачи', body: r.body, tag: 'rule-' + r.id, url: './' });
+    if (x.status === 404 || x.status === 410) { await env.KV.delete('sub'); break; }
+    if (x.status < 300) { sent[key] = Date.now(); n++; changed = true; }
+  }
   for (const k of Object.keys(sent)) if (Date.now() - sent[k] > 7 * 86400000) { delete sent[k]; changed = true; }
   if (changed) await env.KV.put('sent', JSON.stringify(sent));
   return { sent: n };
