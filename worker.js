@@ -128,6 +128,15 @@ export default {
       const r = await sendPush(env, JSON.parse(raw), { title: '📋 Задачи', body: '🟢 Тест: известията работят', url: './' });
       return json(r, r.status < 300 ? 200 : 502);
     }
+    if (url.pathname === '/ai' && req.method === 'POST') {
+      if (!env.AI) return json({ error: 'no ai' }, 501);
+      const b = await req.json();
+      const msgs = [{ role: 'system', content: 'Отговаряй само с исканото съдържание, без обяснения и без увод.' }, { role: 'user', content: String(b.prompt || '').slice(0, 12000) }];
+      let r;
+      try { r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: msgs, max_tokens: 1800 }); }
+      catch (e) { try { r = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', { messages: msgs, max_tokens: 1800 }); } catch (e2) { return json({ error: String(e2 && e2.message || e2) }, 502); } }
+      return json({ text: String(r.response || '') });
+    }
     return json({ error: 'not found' }, 404);
   },
   async scheduled(ev, env, ctx) { ctx.waitUntil(runDue(env)); },

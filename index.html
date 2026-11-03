@@ -18,6 +18,14 @@ window.claude={use:async function(n){
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=o.filename; document.body.appendChild(a); a.click(); setTimeout(function(){a.remove();},500);
   }};
   if(n==='assets') return {upload:async function(){ return {id:'f'+Date.now()}; },delete:async function(){}};
+  if(n==='sample') return async function(prompt){
+    var cfg={}; try{ cfg=JSON.parse(localStorage.getItem('zadachi.cfg')||'{}'); }catch(e){}
+    if(!cfg.api) throw {code:'sampling_disabled'};
+    var r=await fetch(cfg.api.replace(/\/+$/,'')+'/ai',{method:'POST',headers:{'Authorization':'Bearer '+cfg.token,'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt})});
+    if(!r.ok) throw {code:r.status===429?'rate_limited':'sampling_disabled'};
+    var j=await r.json(); if(!j.text) throw {code:'sampling_disabled'};
+    return {text:j.text,truncated:false};
+  };
   return null;
 }};
 </script>

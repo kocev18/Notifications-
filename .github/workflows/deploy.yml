@@ -37,6 +37,8 @@ jobs:
           [[kv_namespaces]]
           binding = "KV"
           id = "$KV"
+          [ai]
+          binding = "AI"
           [triggers]
           crons = ["* * * * *"]
           TOML
