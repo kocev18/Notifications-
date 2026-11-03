@@ -701,11 +701,21 @@ function applyRemote(d0){
   if(d0.plans&&d0.plans.tabs&&d0.plans.tabs.length) plans=d0.plans;
   applyPal(ui.pal||''); migrateSched(); lsSet(); render(); checkReminders(true);
 }
+function planFix(){
+  if(ui.planFix===2) return;
+  var def=defPlans().tabs, have=plans.tabs||[], out=[];
+  def.forEach(function(d){ out.push(have.find(function(t){return t.id===d.id;})||d); });
+  have.forEach(function(t){ if(!out.some(function(o){return o.id===t.id;})) out.push(t); });
+  if(!out.some(function(t){return t.name==='Лепене';})) out.push({id:'tp',name:'Лепене'});
+  plans.tabs=out; ui.planFix=2; persist();
+  try{ if(!$('#scrim').hidden&&$('.ptab')) planPanel(); }catch(e){}
+}
 function pull(first){
   if(!CFG.api||dirty||saving) return;
   api('/state').then(function(r){
     if(r.state&&r.rev!==rev){ if(JSON.stringify(r.state)!==JSON.stringify(snapshot())) applyRemote(r.state); rev=r.rev; try{localStorage.setItem('zadachi.rev',String(rev));}catch(e){} }
     else if(!r.state&&first&&(tasks.length||Object.keys(hours).length)){ dirty=true; flush(); }
+    planFix();
   }).catch(function(){});
 }
 function setupServer(){
