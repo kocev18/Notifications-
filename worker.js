@@ -70,7 +70,7 @@ async function runDue(env) {
     const key = t.id + '|' + t.date + ' ' + t.time;
     if (sent[key]) continue;
     const late = minutesBetween(now, t.date + ' ' + t.time);
-    if (late < 0 || late > 90) continue;
+    if (late < -1 || late > 90) continue; // 1 минута по-рано, за да дойде точно в часа
     const em = t.prio === 3 ? '🔴' : t.prio === 2 ? '🟡' : '🟢';
     const r = await sendPush(env, sub, { title: '📋 Задачи', body: em + ' ' + t.time + ' · ' + t.title, tag: t.id, url: './?t=' + encodeURIComponent(t.id) });
     if (r.status === 404 || r.status === 410) { await env.KV.delete('sub'); break; }
@@ -92,7 +92,7 @@ async function runDue(env) {
     const key = 'rule:' + r.id + '|' + date;
     if (!r.on || sent[key]) continue;
     const late = minutesBetween(now, date + ' ' + r.at);
-    if (late < 0 || late > 90) continue;
+    if (late < -1 || late > 90) continue; // 1 минута по-рано, за да дойде точно в часа
     const x = await sendPush(env, sub, { title: '📋 Задачи', body: r.body, tag: 'rule-' + r.id, url: './' });
     if (x.status === 404 || x.status === 410) { await env.KV.delete('sub'); break; }
     if (x.status < 300) { sent[key] = Date.now(); n++; changed = true; }
