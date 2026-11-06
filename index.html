@@ -1211,11 +1211,16 @@ function monthKey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1);}
 function monthEntries(mk){ return Object.keys(hours).filter(function(k){return k.indexOf(mk+'-')===0;}).sort(); }
 function lastHours(){ var ks=Object.keys(hours).sort(); return ks.length?hours[ks[ks.length-1]]:{from:'09:00',to:'17:00',brk:0,segs:[{from:'09:00',to:'17:00',r:10}]}; }
 function dayLabel(k){ var d=fromIso(k); return WDS[d.getDay()]+', '+d.getDate()+' '+MS[d.getMonth()]; }
+function hLine(k,e){
+  var p=k.split('-'), g=segsOf(e);
+  var segs=g.map(function(x){ return 'от '+x.from+' до '+x.to+(x.r?' ('+x.r+'лв)':''); }).join(', ');
+  return p[2]+'.'+p[1]+'.'+p[0].slice(2)+' - '+segs+(e.brk?' (пауза '+e.brk+' мин)':'');
+}
 function hoursText(mk0){
   var mk=mk0||monthKey(hMonth), mp=mk.split('-'), keys=monthEntries(mk), tot=keys.reduce(function(a,k){return a+dur(hours[k]);},0);
   var lines=['Часове Ред Хот · '+MONTHS_C[+mp[1]-1]+' '+mp[0],''];
   keys.forEach(function(k){ var d=fromIso(k), e=hours[k];
-    lines.push(WDS[d.getDay()]+' '+pad(d.getDate())+'.'+pad(d.getMonth()+1)+'  '+segTxt(e)+(e.brk?' (пауза '+e.brk+' мин)':'')+'  '+fmtDur(dur(e))+sfx(e)); });
+    lines.push(hLine(k,e)); });
   lines.push('','Общо: '+fmtDur(tot)+' ('+dec(tot)+' ч) · '+keys.length+' дни'+(sumEarn(keys)?' · '+money(sumEarn(keys)):''));
   return lines.join('\n');
 }
@@ -1227,7 +1232,7 @@ function hoursDocAll(){
     grand+=tot; days+=keys.length;
     out.push(MONTHS_C[+p[1]-1]+' '+p[0]);
     keys.forEach(function(k){ var d=fromIso(k), e=hours[k];
-      out.push(WDS[d.getDay()]+' '+pad(d.getDate())+'.'+pad(d.getMonth()+1)+'  '+segTxt(e)+(e.brk?' (пауза '+e.brk+' мин)':'')+'  '+fmtDur(dur(e))+sfx(e)); });
+      out.push(hLine(k,e)); });
     out.push('Общо за месеца: '+fmtDur(tot)+' ('+dec(tot)+' ч) · '+keys.length+' '+(keys.length===1?'ден':'дни')+(sumEarn(keys)?' · '+money(sumEarn(keys)):''),'');
     gE+=sumEarn(keys);
   });
