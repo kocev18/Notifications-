@@ -840,7 +840,7 @@ function calView(todayIso,open){
   if(selDate<=todayIso){
     var he=hours[selDate];
     h+='<button class="hcard'+(enterAll?' enter':'')+'" data-act="hours" data-d="'+selDate+'"><span class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>'+
-      '<span class="hb"><span class="ht">Часове Ред Хот'+(hdone[selDate]?' ✓':'')+'</span><span class="hs">'+(hdone[selDate]&&!he?'Готово за деня':he?esc(he.from+'–'+he.to)+' · '+esc(fmtDur(dur(he))):'Не са въведени · напомняне в 22:00')+'</span></span>'+r+'</button>';
+      '<span class="hb"><span class="ht">Часове Ред Хот'+(hdone[selDate]?' ✓':'')+'</span><span class="hs">'+(hdone[selDate]&&!he?'Готово за деня':he&&he.rest?'Почивка':he?esc(he.from+'–'+he.to)+' · '+esc(fmtDur(dur(he))):'Не са въведени · напомняне в 22:00')+'</span></span>'+r+'</button>';
   }
   if(fromIso(selDate).getDay()===0){
     h+='<button class="hcard'+(enterAll?' enter':'')+'" data-act="sched" data-d="'+selDate+'"><span class="hic sic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 10h18M9 4v17M15 10v11"/></svg></span><span class="hb"><span class="ht">График</span><span class="hs">Напиши графика във Viber групите · 10:00</span></span>'+r+'</button>';
@@ -1209,10 +1209,11 @@ function sfx(e){ if(!earn(e)) return ''; return segsOf(e).length>1?' = '+money(e
 function sumEarn(keys){ return keys.reduce(function(a,k){return a+earn(hours[k]);},0); }
 function monthKey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1);}
 function monthEntries(mk){ return Object.keys(hours).filter(function(k){return k.indexOf(mk+'-')===0;}).sort(); }
-function lastHours(){ var ks=Object.keys(hours).sort(); return ks.length?hours[ks[ks.length-1]]:{from:'09:00',to:'17:00',brk:0,segs:[{from:'09:00',to:'17:00',r:10}]}; }
+function lastHours(){ var ks=Object.keys(hours).filter(function(k){return !hours[k].rest;}).sort(); return ks.length?hours[ks[ks.length-1]]:{from:'09:00',to:'17:00',brk:0,segs:[{from:'09:00',to:'17:00',r:10}]}; }
 function dayLabel(k){ var d=fromIso(k); return WDS[d.getDay()]+', '+d.getDate()+' '+MS[d.getMonth()]; }
 function hLine(k,e){
   var p=k.split('-'), g=segsOf(e);
+  if(e.rest) return p[2]+'.'+p[1]+'.'+p[0].slice(2)+' - почивка';
   var segs=g.map(function(x){ return 'от '+x.from+' до '+x.to+(x.r?' ('+x.r+'лв)':''); }).join(', ');
   return p[2]+'.'+p[1]+'.'+p[0].slice(2)+' - '+segs+(e.brk?' (пауза '+e.brk+' мин)':'');
 }
@@ -1221,7 +1222,8 @@ function hoursText(mk0){
   var lines=['Часове Ред Хот · '+MONTHS_C[+mp[1]-1]+' '+mp[0],''];
   keys.forEach(function(k){ var d=fromIso(k), e=hours[k];
     lines.push(hLine(k,e)); });
-  lines.push('','Общо: '+fmtDur(tot)+' ('+dec(tot)+' ч) · '+keys.length+' дни'+(sumEarn(keys)?' · '+money(sumEarn(keys)):''));
+  var wd=keys.filter(function(k){return !hours[k].rest;}).length, rd=keys.length-wd;
+  lines.push('','Общо: '+fmtDur(tot)+' ('+dec(tot)+' ч) · '+wd+' дни'+(rd?' · почивни: '+rd:'')+(sumEarn(keys)?' · '+money(sumEarn(keys)):''));
   return lines.join('\n');
 }
 function allMonthKeys(){ var m={}; Object.keys(hours).forEach(function(k){ m[k.slice(0,7)]=1; }); return Object.keys(m).sort(); }
@@ -1229,11 +1231,12 @@ function hoursDocAll(){
   var ms=allMonthKeys(), out=['Часове Ред Хот',''], grand=0, days=0, gE=0;
   ms.forEach(function(mk){
     var keys=monthEntries(mk), tot=keys.reduce(function(a,k){return a+dur(hours[k]);},0), p=mk.split('-');
-    grand+=tot; days+=keys.length;
+    grand+=tot; days+=keys.filter(function(k){return !hours[k].rest;}).length;
     out.push(MONTHS_C[+p[1]-1]+' '+p[0]);
     keys.forEach(function(k){ var d=fromIso(k), e=hours[k];
       out.push(hLine(k,e)); });
-    out.push('Общо за месеца: '+fmtDur(tot)+' ('+dec(tot)+' ч) · '+keys.length+' '+(keys.length===1?'ден':'дни')+(sumEarn(keys)?' · '+money(sumEarn(keys)):''),'');
+    var wdk=keys.filter(function(k){return !hours[k].rest;}).length, rdk=keys.length-wdk;
+    out.push('Общо за месеца: '+fmtDur(tot)+' ('+dec(tot)+' ч) · '+wdk+' '+(wdk===1?'ден':'дни')+(rdk?' · почивни: '+rdk:'')+(sumEarn(keys)?' · '+money(sumEarn(keys)):''),'');
     gE+=sumEarn(keys);
   });
   if(!ms.length) out.push('Още няма въведени часове.'); else out.push('Общо за всички месеци: '+fmtDur(grand)+' ('+dec(grand)+' ч) · '+days+' дни'+(gE?' · '+money(gE):''));
@@ -1245,21 +1248,21 @@ function hoursAlert(){
 function brkLabel(m){ return m===0?'Без пауза':(m<60?m+' мин':fmtDur(m)); }
 function hoursPanel(){
   var sh=document.querySelector('#scrim .sheet'); if(!sh) return;
-  var mk=monthKey(hMonth), keys=monthEntries(mk), tot=keys.reduce(function(a,k){return a+dur(hours[k]);},0);
+  var mk=monthKey(hMonth), keys=monthEntries(mk), tot=keys.reduce(function(a,k){return a+dur(hours[k]);},0), wk=keys.filter(function(k){return !hours[k].rest;});
   var cur=hours[hSel]||null, def=cur||hDraft||lastHours();
   var l='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
   var r='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>';
   var head='<div class="grab"></div><h3>Часове Ред Хот</h3>'+
     '<div class="hhead"><strong>'+MONTHS_C[hMonth.getMonth()]+' '+hMonth.getFullYear()+'</strong><div style="display:flex"><button class="cbtn" data-h="prev" aria-label="Предишен месец">'+l+'</button><button class="cbtn" data-h="next" aria-label="Следващ месец">'+r+'</button></div></div>'+
-    '<div class="hsum"><div class="big">'+fmtDur(tot)+'</div><div class="sub">'+dec(tot)+' ч · '+keys.length+' '+(keys.length===1?'ден':'дни')+(keys.length?' · средно '+fmtDur(Math.round(tot/keys.length))+' на ден':'')+'</div>'+(sumEarn(keys)?'<div class="sub">Заплата: <b style="color:var(--ink)">'+esc(money(sumEarn(keys)))+'</b></div>':'')+'</div>'+
+    '<div class="hsum"><div class="big">'+fmtDur(tot)+'</div><div class="sub">'+dec(tot)+' ч · '+wk.length+' '+(wk.length===1?'ден':'дни')+(keys.length-wk.length?' · почивни: '+(keys.length-wk.length):'')+(wk.length?' · средно '+fmtDur(Math.round(tot/wk.length))+' на ден':'')+'</div>'+(sumEarn(keys)?'<div class="sub">Заплата: <b style="color:var(--ink)">'+esc(money(sumEarn(keys)))+'</b></div>':'')+'</div>'+
     '<div class="seg s2" style="--i:'+(hTab==='list'?1:0)+'" role="group" aria-label="Раздел"><button data-t="enter" aria-pressed="'+(hTab!=='list')+'">Въвеждане</button><button data-t="list" aria-pressed="'+(hTab==='list')+'">Списък'+(keys.length?' · '+keys.length:'')+'</button></div>';
   var body;
   if(hTab==='list'){
     var ms=allMonthKeys().reverse();
     body=(ms.length?ms.map(function(mk){
       var ks=monthEntries(mk), tt=ks.reduce(function(x,k){return x+dur(hours[k]);},0), p=mk.split('-');
-      return '<div><div class="mh"><strong>'+MONTHS_C[+p[1]-1]+' '+p[0]+'</strong><span>'+esc(fmtDur(tt))+' · '+ks.length+' '+(ks.length===1?'ден':'дни')+(sumEarn(ks)?' · '+esc(money(sumEarn(ks))):'')+'</span></div><div class="hlist">'+
-        ks.slice().reverse().map(function(k){var e=hours[k];return '<button class="hrow" data-k="'+k+'"><span>'+esc(dayLabel(k))+'</span><span class="hr">'+esc(e.from+'–'+e.to)+'</span><span class="hv">'+esc(fmtDur(dur(e)))+'</span></button>';}).join('')+'</div><div class="acts"><button class="btn" type="button" data-hcm="'+mk+'" style="flex:1">Копирай '+MONTHS[+p[1]-1]+'</button></div></div>';
+      return '<div><div class="mh"><strong>'+MONTHS_C[+p[1]-1]+' '+p[0]+'</strong><span>'+esc(fmtDur(tt))+' · '+ks.filter(function(k){return !hours[k].rest;}).length+' '+(ks.filter(function(k){return !hours[k].rest;}).length===1?'ден':'дни')+(sumEarn(ks)?' · '+esc(money(sumEarn(ks))):'')+'</span></div><div class="hlist">'+
+        ks.slice().reverse().map(function(k){var e=hours[k];return '<button class="hrow" data-k="'+k+'"><span>'+esc(dayLabel(k))+'</span><span class="hr">'+(e.rest?'':esc(e.from+'–'+e.to))+'</span><span class="hv">'+(e.rest?'Почивка':esc(fmtDur(dur(e))))+'</span></button>';}).join('')+'</div><div class="acts"><button class="btn" type="button" data-hcm="'+mk+'" style="flex:1">Копирай '+MONTHS[+p[1]-1]+'</button></div></div>';
     }).join(''):'<p class="note">Още няма въведени часове.</p>')+
       '<div class="acts"><button class="btn pri" id="h-doc" type="button" style="flex:1">Запази като документ</button><button class="btn" id="h-copy" type="button">Копирай</button></div>';
   }else{
@@ -1267,7 +1270,8 @@ function hoursPanel(){
       '<div id="h-segs"></div>'+
       '<div class="hres" id="h-res"></div>'+
       '<div class="acts big">'+(hdone[hSel]?'<button class="btn" id="h-done" type="button" style="flex:1">Върни като неготово</button>':'<button class="btn okb" id="h-finish" type="button" style="flex:1">Запази и приключи</button>')+'<button class="btn pri" id="h-save" type="button" style="flex:1">Запази</button></div>'+
-      (cur?'<div class="acts"><button class="btn del" id="h-del" type="button" style="flex:1">Изтрий записа</button></div>':'');
+      (cur&&cur.rest?'':'<div class="acts"><button class="btn" id="h-rest" type="button" style="flex:1">🌴 Почивен ден</button></div>')+
+      (cur?'<div class="acts"><button class="btn del" id="h-del" type="button" style="flex:1">'+(cur.rest?'Махни почивката':'Изтрий записа')+'</button></div>':'');
   }
   sh.innerHTML=head+body+'<div class="acts"><button class="btn" id="h-close" type="button" style="flex:1">Затвори</button></div>';
   $('#h-close').onclick=closeSheet;
@@ -1335,6 +1339,10 @@ function hoursPanel(){
     hours[hSel]=e; persist(); toast('Записано · '+dayLabel(hSel)+' · '+fmtDur(dur(e))); hoursPanel(); render();
   };
   var hd=$('#h-done'); if(hd) hd.onclick=function(){ delete hdone[hSel]; persist(); flushNow(); toast('Върнато като неготово.'); hoursPanel(); render(); };
+  var hrs=$('#h-rest'); if(hrs) hrs.onclick=function(){
+    var k=hSel, prev=hours[k]; hours[k]={rest:true,from:'',to:'',brk:0,segs:[]}; hdone[k]=true; persist(); flushNow(); closeSheet(); render();
+    toast('Почивен ден · '+dayLabel(k),'Отмени',function(){ if(prev) hours[k]=prev; else delete hours[k]; delete hdone[k]; persist(); render(); });
+  };
   var hf=$('#h-finish'); if(hf) hf.onclick=function(){
     var e=cur2(); if(sg.some(function(g){return !g.from||!g.to;})){ calc(); return; }
     var k=hSel; hours[k]=e; hdone[k]=true; persist(); flushNow(); closeSheet(); render();
