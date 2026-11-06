@@ -1211,9 +1211,9 @@ function monthKey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1);}
 function monthEntries(mk){ return Object.keys(hours).filter(function(k){return k.indexOf(mk+'-')===0;}).sort(); }
 function lastHours(){ var ks=Object.keys(hours).sort(); return ks.length?hours[ks[ks.length-1]]:{from:'09:00',to:'17:00',brk:0,segs:[{from:'09:00',to:'17:00',r:10}]}; }
 function dayLabel(k){ var d=fromIso(k); return WDS[d.getDay()]+', '+d.getDate()+' '+MS[d.getMonth()]; }
-function hoursText(){
-  var mk=monthKey(hMonth), keys=monthEntries(mk), tot=keys.reduce(function(a,k){return a+dur(hours[k]);},0);
-  var lines=['Часове Ред Хот · '+MONTHS_C[hMonth.getMonth()]+' '+hMonth.getFullYear(),''];
+function hoursText(mk0){
+  var mk=mk0||monthKey(hMonth), mp=mk.split('-'), keys=monthEntries(mk), tot=keys.reduce(function(a,k){return a+dur(hours[k]);},0);
+  var lines=['Часове Ред Хот · '+MONTHS_C[+mp[1]-1]+' '+mp[0],''];
   keys.forEach(function(k){ var d=fromIso(k), e=hours[k];
     lines.push(WDS[d.getDay()]+' '+pad(d.getDate())+'.'+pad(d.getMonth()+1)+'  '+segTxt(e)+(e.brk?' (пауза '+e.brk+' мин)':'')+'  '+fmtDur(dur(e))+sfx(e)); });
   lines.push('','Общо: '+fmtDur(tot)+' ('+dec(tot)+' ч) · '+keys.length+' дни'+(sumEarn(keys)?' · '+money(sumEarn(keys)):''));
@@ -1254,7 +1254,7 @@ function hoursPanel(){
     body=(ms.length?ms.map(function(mk){
       var ks=monthEntries(mk), tt=ks.reduce(function(x,k){return x+dur(hours[k]);},0), p=mk.split('-');
       return '<div><div class="mh"><strong>'+MONTHS_C[+p[1]-1]+' '+p[0]+'</strong><span>'+esc(fmtDur(tt))+' · '+ks.length+' '+(ks.length===1?'ден':'дни')+(sumEarn(ks)?' · '+esc(money(sumEarn(ks))):'')+'</span></div><div class="hlist">'+
-        ks.slice().reverse().map(function(k){var e=hours[k];return '<button class="hrow" data-k="'+k+'"><span>'+esc(dayLabel(k))+'</span><span class="hr">'+esc(e.from+'–'+e.to)+'</span><span class="hv">'+esc(fmtDur(dur(e)))+'</span></button>';}).join('')+'</div></div>';
+        ks.slice().reverse().map(function(k){var e=hours[k];return '<button class="hrow" data-k="'+k+'"><span>'+esc(dayLabel(k))+'</span><span class="hr">'+esc(e.from+'–'+e.to)+'</span><span class="hv">'+esc(fmtDur(dur(e)))+'</span></button>';}).join('')+'</div><div class="acts"><button class="btn" type="button" data-hcm="'+mk+'" style="flex:1">Копирай '+MONTHS[+p[1]-1]+'</button></div></div>';
     }).join(''):'<p class="note">Още няма въведени часове.</p>')+
       '<div class="acts"><button class="btn pri" id="h-doc" type="button" style="flex:1">Запази като документ</button><button class="btn" id="h-copy" type="button">Копирай</button></div>';
   }else{
@@ -1278,6 +1278,12 @@ function hoursPanel(){
         await dl.save({filename:'Часове Ред Хот.txt',data:data}); toast('Документът е готов.');
       }catch(e){ if(!e||e.code!=='declined') toast('Не успях да запиша документа.'); }
     };
+    sh.querySelectorAll('[data-hcm]').forEach(function(b){ b.onclick=function(){
+      var txt=hoursText(b.dataset.hcm);
+      function fb(){ try{ var ta=document.createElement('textarea'); ta.value=txt; ta.setAttribute('readonly',''); ta.style.cssText='position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,txt.length); var ok=document.execCommand('copy'); ta.remove(); toast(ok?'Месецът е копиран.':'Не успях да копирам.'); }catch(e){ toast('Не успях да копирам.'); } }
+      try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){toast('Месецът е копиран.');},fb); return; } }catch(e){}
+      fb();
+    }; });
     $('#h-copy').onclick=function(){
       var txt=hoursDocAll();
       try{ navigator.clipboard.writeText(txt).then(function(){toast('Документът е копиран.');},function(){toast('Не успях да копирам.');}); }catch(x){ toast('Не успях да копирам.'); }
