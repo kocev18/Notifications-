@@ -713,12 +713,17 @@ function planFix(){
   plans.tabs=out; ui.planFix=2; persist();
   try{ if(!$('#scrim').hidden&&$('.ptab')) planPanel(); }catch(e){}
 }
+function notifyFix(){
+  if(ui.notifyMig===1) return;
+  tasks.forEach(function(t){ if(!t.done) t.notify=true; });
+  ui.notifyMig=1; persist(); try{ render(); }catch(e){}
+}
 function pull(first){
   if(!CFG.api||dirty||saving) return;
   api('/state').then(function(r){
     if(r.state&&r.rev!==rev){ if(JSON.stringify(r.state)!==JSON.stringify(snapshot())) applyRemote(r.state); rev=r.rev; try{localStorage.setItem('zadachi.rev',String(rev));}catch(e){} }
     else if(!r.state&&first&&(tasks.length||Object.keys(hours).length)){ dirty=true; flush(); }
-    planFix();
+    planFix(); notifyFix();
   }).catch(function(){});
 }
 function setupServer(){
@@ -837,7 +842,7 @@ function calView(todayIso,open){
       '<div class="wds">'+WDH.map(function(x){return '<span>'+x+'</span>';}).join('')+'</div><div class="gridm">'+cells+'</div></div>';
   }
   h+=holCard(selDate,enterAll);
-  if(selDate<=todayIso){
+  {
     var he=hours[selDate];
     h+='<button class="hcard'+(enterAll?' enter':'')+'" data-act="hours" data-d="'+selDate+'"><span class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>'+
       '<span class="hb"><span class="ht">Часове Ред Хот'+(hdone[selDate]?' ✓':'')+'</span><span class="hs">'+(hdone[selDate]&&!he?'Готово за деня':he&&isRest(he)?'Почивка':he?esc(he.from+'–'+he.to)+' · '+esc(fmtDur(dur(he))):'Не са въведени · напомняне в 22:00')+'</span></span>'+r+'</button>';
@@ -932,7 +937,7 @@ function addFrom(text){
   text=text.trim(); if(!text) return false;
   var p=parse(text);
   if(view==='cal'&&!p.date&&!p.time) p.date=selDate;
-  var t={id:rid(),title:p.title,date:p.date,time:p.time,prio:p.prio,cat:p.cat,notify:!!p.notify,done:false,created:Date.now()};
+  var t={id:rid(),title:p.title,date:p.date,time:p.time,prio:p.prio,cat:p.cat,notify:!!p.notify||ui.notifyAll!==false,done:false,created:Date.now()};
   tasks.unshift(t); freshId=t.id;
   if(view==='cal'&&t.date){ selDate=t.date; var dd=fromIso(t.date); calMonth=new Date(dd.getFullYear(),dd.getMonth(),1); }
   persist(); render();

@@ -66,13 +66,14 @@ async function runDue(env) {
   const state = JSON.parse(stRaw).state || {}, sub = JSON.parse(subRaw), sent = sentRaw ? JSON.parse(sentRaw) : {};
   const now = nowSofia(); let n = 0, changed = false;
   for (const t of state.tasks || []) {
-    if (!t.notify || t.done || !t.date || !t.time) continue;
-    const key = t.id + '|' + t.date + ' ' + t.time;
+    if (!t.notify || t.done || !t.date) continue;
+    const tm = t.time || '09:00';
+    const key = t.id + '|' + t.date + ' ' + tm;
     if (sent[key]) continue;
-    const late = minutesBetween(now, t.date + ' ' + t.time);
+    const late = minutesBetween(now, t.date + ' ' + tm);
     if (late < -1 || late > 90) continue; // 1 минута по-рано, за да дойде точно в часа
     const em = t.prio === 3 ? '🔴' : t.prio === 2 ? '🟡' : '🟢';
-    const r = await sendPush(env, sub, { title: '📋 Задачи', body: em + ' ' + t.time + ' · ' + t.title, tag: t.id, url: './?t=' + encodeURIComponent(t.id) });
+    const r = await sendPush(env, sub, { title: '📋 Задачи', body: em + ' ' + tm + ' · ' + t.title, tag: t.id, url: './?t=' + encodeURIComponent(t.id) });
     if (r.status === 404 || r.status === 410) { await env.KV.delete('sub'); break; }
     if (r.status < 300) { sent[key] = Date.now(); n++; changed = true; }
   }
@@ -88,6 +89,14 @@ async function runDue(env) {
     { id: 'sp22', at: '22:00', on: true, body: '🟡 22:00 · Разходи – запиши колко похарчи днес' + spTxt(state, date) },
     { id: 'andrea', at: '10:00', on: dd === 30 || (mm === 2 && dd === lastFeb), body: '🟡 10:00 · Честити на Андреа' },
   ];
+  const farm = state.farm || {};
+  rules.push({ id: 'eggs', at: '19:00', on: !(farm.days && farm.days[date]), body: '🟡 19:00 · Яребична кокошки – запиши яйцата за днес' });
+  (farm.vacc || []).forEach((v) => {
+    if (v.done || !v.date) return;
+    if (v.date === date) rules.push({ id: 'vac-' + v.id, at: '09:00', on: true, body: '🟡 09:00 · Днес: ' + v.title });
+    const tom = new Date(Date.UTC(yy, mm - 1, dd + 1)).toISOString().slice(0, 10);
+    if (v.date === tom) rules.push({ id: 'vac1-' + v.id, at: '09:00', on: true, body: '🟡 09:00 · Утре: ' + v.title });
+  });
   for (const r of rules) {
     const key = 'rule:' + r.id + '|' + date;
     if (!r.on || sent[key]) continue;
