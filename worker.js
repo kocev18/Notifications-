@@ -211,13 +211,76 @@ async function ownerRoute(req, env, url) {
   return null;
 }
 
+
+// ---------- Профили (вход с име и парола) ----------
+const okUser = (u) => typeof u === 'string' && /^[\p{L}\p{N}_.-]{2,32}$/u.test(u);
+async function pbkdf(pass, saltB64) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: b64u.dec(saltB64), iterations: 100000 }, key, 256);
+  return b64u.enc(new Uint8Array(bits));
+}
+async function hmacTok(env, msg) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.TOKEN), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return b64u.enc(new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(msg))));
+}
+const sameStr = (a, b) => { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; };
+async function authLevel(req, env) {
+  const h = req.headers.get('Authorization') || '';
+  if (!h.startsWith('Bearer ')) return null;
+  const t = h.slice(7);
+  if (sameStr(t, env.TOKEN)) return 'master';
+  const m = /^u\.([^.]+)\.([A-Za-z0-9_-]+)$/.exec(t);
+  if (!m) return null;
+  const u = decodeURIComponent(m[1]); const acc = (await kvJson(env, 'accounts', {}))[u];
+  if (!acc) return null;
+  return sameStr(m[2], await hmacTok(env, 'sess|' + u + '|' + acc.salt)) ? 'user' : null;
+}
+async function loginRoute(req, env, url) {
+  if (url.pathname !== '/login' || req.method !== 'POST') return null;
+  const b = await req.json().catch(() => ({})); const u = String(b.u || '').trim(); const p = String(b.p || '');
+  const key = 'try:' + u.toLowerCase(); const tries = +(await env.KV.get(key) || 0);
+  if (tries >= 10) return json({ error: 'locked' }, 429);
+  const accounts = await kvJson(env, 'accounts', {});
+  const name = Object.keys(accounts).find((x) => x.toLowerCase() === u.toLowerCase());
+  const acc = name && accounts[name];
+  if (!acc || !sameStr(await pbkdf(p, acc.salt), acc.hash)) {
+    await env.KV.put(key, String(tries + 1), { expirationTtl: 900 });
+    return json({ error: 'bad' }, 401);
+  }
+  await env.KV.delete(key);
+  return json({ token: 'u.' + encodeURIComponent(name) + '.' + await hmacTok(env, 'sess|' + name + '|' + acc.salt), name });
+}
+async function accountRoute(req, env, url) {
+  const p = url.pathname;
+  if (p === '/accounts' && req.method === 'GET') return json({ names: Object.keys(await kvJson(env, 'accounts', {})) });
+  if (p === '/account' && req.method === 'POST') {
+    const b = await req.json(); const u = String(b.u || '').trim(); const pw = String(b.p || '');
+    if (!okUser(u) || pw.length < 6) return json({ error: 'bad' }, 400);
+    const accounts = await kvJson(env, 'accounts', {});
+    const old = Object.keys(accounts).find((x) => x.toLowerCase() === u.toLowerCase()); if (old) delete accounts[old];
+    const salt = b64u.enc(crypto.getRandomValues(new Uint8Array(16)));
+    accounts[u] = { salt, hash: await pbkdf(pw, salt) };
+    await env.KV.put('accounts', JSON.stringify(accounts));
+    return json({ ok: true });
+  }
+  if (p === '/account/del' && req.method === 'POST') {
+    const b = await req.json(); const accounts = await kvJson(env, 'accounts', {}); delete accounts[b.u];
+    await env.KV.put('accounts', JSON.stringify(accounts));
+    return json({ ok: true });
+  }
+  return null;
+}
+
 export default {
   async fetch(req, env) {
     if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(req.url);
     const pub = await publicRoute(req, env, url);
     if (pub) return pub;
-    if (req.headers.get('Authorization') !== 'Bearer ' + env.TOKEN) return json({ error: 'unauthorized' }, 401);
+    const lg = await loginRoute(req, env, url); if (lg) return lg;
+    const lvl = await authLevel(req, env);
+    if (!lvl) return json({ error: 'unauthorized' }, 401);
+    if (lvl === 'master') { const ac = await accountRoute(req, env, url); if (ac) return ac; }
     const own = await ownerRoute(req, env, url);
     if (own) return own;
     if (url.pathname === '/state' && req.method === 'GET') {

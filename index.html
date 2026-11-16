@@ -537,6 +537,9 @@ textarea.fin{height:auto;min-height:110px;padding:12px 14px;resize:none;line-hei
       <button class="tbtn" id="pplbtn" aria-label="Хора и задачи" title="Хора и задачи">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.3c1.9.8 3 2.6 3 5.7"/></svg>
       </button>
+      <button class="tbtn" id="acbtn" aria-label="Профили" title="Профили">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M17 4l2 2 3-3" stroke-width="1.8"/></svg>
+      </button>
       <button class="tbtn" id="sbtn" aria-label="Разходи" title="Разходи">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/></svg>
       </button>
@@ -713,7 +716,7 @@ var CFG={api:'',token:''}, rev=0, pullTimer=null;
 try{ var c0=JSON.parse(localStorage.getItem('zadachi.cfg')||'{}'); if(c0.api) CFG=c0; }catch(e){}
 function api(path,opt){
   opt=opt||{}; opt.headers=Object.assign({'Authorization':'Bearer '+CFG.token},opt.headers||{});
-  return fetch(CFG.api.replace(/\/+$/,'')+path,opt).then(function(r){ if(r.status===401){ try{localStorage.removeItem('zadachi.cfg');}catch(e){} CFG={api:CFG.api,token:''}; setTimeout(function(){ toast('Грешна парола. Въведи я отново.'); if(setupServer()) pull(true); },300); } if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+  return fetch(CFG.api.replace(/\/+$/,'')+path,opt).then(function(r){ if(r.status===401){ try{localStorage.removeItem('zadachi.cfg');}catch(e){} CFG={api:CFG.api,token:''}; setTimeout(function(){ showLogin('Влез отново',function(){ pull(true); }); },300); } if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
 }
 function snapshot(){ return {tasks:clone(tasks),hours:clone(hours),cars:clone(cars),checks:clone(checks),plans:clone(plans),docs:clone(docs),farm:clone(farm),ideas:clone(ideas),spend:clone(spend),sched:clone(sched),hdone:clone(hdone),ui:clone(ui),v:10}; }
 function flush(){
@@ -762,7 +765,7 @@ function setupServer(){
 }
 function initStore(){
   try{ rev=+localStorage.getItem('zadachi.rev')||0; }catch(e){}
-  if(!CFG.api){ setTimeout(function(){ if(setupServer()) { pull(true); } },600); }
+  if(!CFG.api||!CFG.token){ setTimeout(function(){ showLogin('',function(){ pull(true); }); },300); }
   else { try{ if(localStorage.getItem('zadachi.pend')==='1'){ dirty=true; setTimeout(flush,300); } else pull(true); }catch(e){ pull(true); } }
   setInterval(function(){ pull(false); },30000);
   document.addEventListener('visibilitychange',function(){ if(!document.hidden) pull(false); });
@@ -771,7 +774,7 @@ function b64uToU8(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); var r=atob(s),o=n
 var VAPID_PUB='BM79tK549nXqcAxRszfTvkTleUBpAv_0zkT9QqrKXjJVCRucZ1MjCMtJSXTf_Xa87XVu1Awv7cxyKH9W7ygB8TU';
 async function pushEnable(quiet){
   try{
-    if(!CFG.api&&!setupServer()) return;
+    if(!CFG.api||!CFG.token){ showLogin('',function(){ pushEnable(quiet); }); return; }
     if(!('serviceWorker' in navigator)||!('PushManager' in window)){ toast('Отвори от иконата на началния екран'); return; }
     var perm=await Notification.requestPermission(); if(perm!=='granted'){ toast('Известията не са разрешени'); return; }
     var reg=await navigator.serviceWorker.ready;
@@ -2102,6 +2105,49 @@ document.addEventListener('keydown',function(e){
   if(typing||!$('#scrim').hidden) return;
   if(e.key==='n'||e.key==='/'||e.key==='н'){ e.preventDefault(); var f=$('#in'); if(f) f.focus(); }
 });
+
+var DEF_API='https://zadachi.a-kkocev.workers.dev';
+function showLogin(msg,cb){
+  if(document.getElementById('login')) return;
+  var o=document.createElement('div'); o.id='login';
+  o.style.cssText='position:fixed;inset:0;z-index:300;background:var(--bg);display:grid;place-items:center;padding:20px;overflow:auto';
+  o.innerHTML='<form id="lg" style="width:100%;max-width:340px;display:grid;gap:12px"><div style="text-align:center;font-size:44px">📋</div><h1 style="text-align:center;margin:0;font-size:28px">Задачи</h1>'+
+    '<p id="lg-m" style="text-align:center;margin:0;color:var(--muted);font-size:15px">'+esc(msg||'Влез в профила си')+'</p>'+
+    '<input class="field" id="lg-u" placeholder="Потребителско име" autocomplete="username" autocapitalize="none" autocorrect="off" style="min-height:50px">'+
+    '<input class="field" id="lg-p" type="password" placeholder="Парола" autocomplete="current-password" style="min-height:50px">'+
+    '<button class="go" id="lg-go" type="submit" style="width:100%;height:50px;border-radius:25px;background:var(--accent);color:#fff;font-weight:600;font-size:17px">Вход</button>'+
+    '<details style="color:var(--muted);font-size:14px"><summary style="cursor:pointer;text-align:center">Вход с парола на сървъра</summary><input class="field" id="lg-t" type="password" placeholder="Парола на сървъра (TOKEN)" style="margin-top:10px;min-height:46px;width:100%"></details></form>';
+  document.body.appendChild(o);
+  var f=o.querySelector('#lg'), m=o.querySelector('#lg-m');
+  function done(tok){ CFG={api:DEF_API,token:tok}; try{localStorage.setItem('zadachi.cfg',JSON.stringify(CFG));}catch(e){} o.remove(); cb&&cb(); }
+  function fail(t){ m.textContent=t; m.style.color='var(--hi,#d33)'; o.querySelector('#lg-go').disabled=false; }
+  f.addEventListener('submit',function(e){
+    e.preventDefault(); var u=o.querySelector('#lg-u').value.trim(), p=o.querySelector('#lg-p').value, t=o.querySelector('#lg-t').value.trim();
+    o.querySelector('#lg-go').disabled=true; m.style.color=''; m.textContent='Влизане…';
+    if(t){ fetch(DEF_API+'/state',{headers:{Authorization:'Bearer '+t}}).then(function(r){ if(r.ok) done(t); else fail('Грешна парола на сървъра'); }).catch(function(){ fail('Няма връзка'); }); return; }
+    if(!u||!p){ fail('Въведи име и парола'); return; }
+    fetch(DEF_API+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:u,p:p})}).then(function(r){ return r.json().then(function(j){ if(r.ok&&j.token) done(j.token); else fail(r.status===429?'Твърде много опити — изчакай 15 мин':'Грешно име или парола'); }); }).catch(function(){ fail('Няма връзка'); });
+  });
+  setTimeout(function(){ try{ o.querySelector('#lg-u').focus(); }catch(e){} },100);
+}
+var acList=null;
+function accPanel(){
+  var sh=document.querySelector('#scrim .sheet'); if(!sh) return;
+  var master=CFG.token&&CFG.token.indexOf('u.')!==0;
+  sh.innerHTML='<div class="grab"></div><h3>Профили</h3>'+
+    '<p class="note" style="margin:0">'+(master?'Влязъл си с паролата на сървъра. Всеки профил вижда и променя същите данни, така че го давай само на себе си.':'Влязъл си като <b>'+esc(decodeURIComponent((CFG.token.split('.')[1]||'')))+'</b>. Нови профили се правят само при вход с паролата на сървъра.')+'</p>'+
+    (acList?acList.map(function(n){ return '<div class="sprow"><span class="sn2">👤 '+esc(n)+'</span><button class="btn" data-del="'+esc(n)+'" type="button">Изтрий</button></div>'; }).join(''):'')+
+    (master?'<div class="mh"><strong>Нов профил</strong></div><input class="field" id="ac-u" placeholder="Потребителско име" autocapitalize="none" style="min-height:46px"><input class="field" id="ac-p" type="text" placeholder="Парола (поне 6 знака)" autocapitalize="none" style="min-height:46px"><button class="btn" id="ac-add" type="button">Създай профил</button>':'')+
+    '<div class="acts"><button class="btn" id="ac-out" type="button" style="flex:1">Изход от това устройство</button><button class="btn" id="ac-close" type="button" style="flex:1">Затвори</button></div>';
+  $('#ac-close').onclick=closeSheet;
+  $('#ac-out').onclick=function(){ try{localStorage.removeItem('zadachi.cfg');localStorage.removeItem('zadachi.rev');}catch(e){} CFG={api:'',token:''}; closeSheet(); showLogin('',function(){ pull(true); }); };
+  var add=$('#ac-add'); if(add) add.onclick=function(){ var u=$('#ac-u').value.trim(), p=$('#ac-p').value; if(!u||p.length<6){ toast('Име и парола от поне 6 знака'); return; }
+    api('/account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:u,p:p})}).then(function(){ toast('Профилът е създаден'); loadAcc(); }).catch(function(){ toast('Грешка — името е с букви/цифри, без интервали'); }); };
+  sh.querySelectorAll('[data-del]').forEach(function(b){ b.onclick=function(){ if(!confirm('Изтриване на профил '+b.dataset.del+'?')) return; api('/account/del',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:b.dataset.del})}).then(loadAcc).catch(function(){}); }; });
+}
+function loadAcc(){ if(CFG.token&&CFG.token.indexOf('u.')===0){ acList=null; accPanel(); return; } api('/accounts').then(function(r){ acList=r.names||[]; if($('#ac-close')) accPanel(); }).catch(function(){}); }
+function openAcc(){ var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.remove('side'); sc.innerHTML='<div class="sheet" role="dialog" aria-label="Профили"></div>'; accPanel(); loadAcc(); }
+$('#acbtn').addEventListener('click',openAcc);
 function openIdeas(){
   var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.add('side');
   sc.innerHTML='<div class="sheet" role="dialog" aria-label="Идеи"></div>'; ideasPanel();
