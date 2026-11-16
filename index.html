@@ -2153,20 +2153,21 @@ function openAcc(){ var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('cl
 $('#acbtn').addEventListener('click',openAcc);
 
 /* ---------- Асистент ---------- */
-var aiLog=[];
+var aiLog=[], aiLast=[], aiHist=[];
 function aiApply(acts){
-  var done=[], snap=clone(tasks), WD=['неделя','понеделник','вторник','сряда','четвъртък','петък','събота'];
+  var done=[], touched=[], snap=clone(tasks), WD=['неделя','понеделник','вторник','сряда','четвъртък','петък','събота'];
   (acts||[]).forEach(function(a){
     var t=a.id?tasks.find(function(x){return x.id===a.id;}):null, okD=/^\d{4}-\d{2}-\d{2}$/.test(a.date||''), okT=/^\d{2}:\d{2}$/.test(a.time||'');
-    if(a.op==='add'&&a.title){ var p=parse(String(a.title)); var n={id:rid(),title:String(a.title).slice(0,200),date:okD?a.date:'',time:okT?a.time:'',prio:[1,2,3].includes(+a.prio)?+a.prio:p.prio,cat:p.cat,notify:true,done:false,created:Date.now()}; tasks.unshift(n); done.push('➕ '+n.title+(n.date?' · '+fmtDate(n.date)+(n.time?' '+n.time:''):'')); }
+    if(a.op==='add'&&a.title){ var p=parse(String(a.title)); var n={id:rid(),title:String(a.title).slice(0,200),date:okD?a.date:'',time:okT?a.time:'',prio:[1,2,3].includes(+a.prio)?+a.prio:p.prio,cat:p.cat,notify:true,done:false,created:Date.now()}; tasks.unshift(n); touched.push(n.id); done.push('➕ '+n.title+(n.date?' · '+fmtDate(n.date)+(n.time?' '+n.time:''):'')); }
     else if(a.op==='done'&&t){ t.done=true; t.doneAt=Date.now(); done.push('✅ '+t.title); }
     else if(a.op==='delete'&&t){ tasks=tasks.filter(function(x){return x!==t;}); done.push('🗑 '+t.title); }
-    else if(a.op==='edit'&&t){ if(a.title) t.title=String(a.title).slice(0,200); if(okD) t.date=a.date; if(okT) t.time=a.time; if([1,2,3].includes(+a.prio)) t.prio=+a.prio; t.done=false; done.push('✏️ '+t.title+(t.date?' · '+fmtDate(t.date)+(t.time?' '+t.time:''):'')); }
-    else if(a.op==='copy'&&t&&okD){ var c=Object.assign({},t,{id:rid(),date:a.date,time:okT?a.time:t.time,done:false,doneAt:0,created:Date.now()}); tasks.unshift(c); done.push('📋 '+c.title+' · '+fmtDate(c.date)+(c.time?' '+c.time:'')); }
-    else if(a.op==='move'&&t&&okD){ t.date=a.date; t.time=okT?a.time:''; done.push('📅 '+t.title+' → '+fmtDate(a.date)+(t.time?' '+t.time:'')); }
+    else if(a.op==='edit'&&t){ if(a.title) t.title=String(a.title).slice(0,200); if(okD) t.date=a.date; if(okT) t.time=a.time; if([1,2,3].includes(+a.prio)) t.prio=+a.prio; t.done=false; touched.push(t.id); done.push('✏️ '+t.title+(t.date?' · '+fmtDate(t.date)+(t.time?' '+t.time:''):'')); }
+    else if(a.op==='copy'&&t&&okD){ var c=Object.assign({},t,{id:rid(),date:a.date,time:okT?a.time:t.time,done:false,doneAt:0,created:Date.now()}); tasks.unshift(c); touched.push(c.id); done.push('📋 '+c.title+' · '+fmtDate(c.date)+(c.time?' '+c.time:'')); }
+    else if(a.op==='move'&&t&&okD){ t.date=a.date; t.time=okT?a.time:''; touched.push(t.id); done.push('📅 '+t.title+' → '+fmtDate(a.date)+(t.time?' '+t.time:'')); }
     else if(a.op==='rename'&&t&&a.title){ t.title=String(a.title).slice(0,200); done.push('✏️ '+t.title); }
   });
   if(done.length){ persist(); render(); }
+  if(touched.length) aiLast=touched.slice(0,6);
   return {done:done,snap:snap};
 }
 function aiPanel(){
@@ -2181,13 +2182,14 @@ function aiPanel(){
     text=text.trim(); if(!text) return; $('#ai-ex').style.display='none'; bub('u',esc(text)); aiLog.push({r:'u',h:esc(text)}); $('#ai-in').value='';
     var wait=bub('a','…'), now=new Date(), WD=['неделя','понеделник','вторник','сряда','четвъртък','петък','събота'];
     var open=tasks.filter(function(t){return !t.done;}), recent=tasks.filter(function(t){return t.done;}).slice(0,10);
-    api('/assist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,today:iso(now),weekday:WD[now.getDay()],now:pad(now.getHours())+':'+pad(now.getMinutes()),tasks:open.concat(recent).map(function(t){return {id:t.id,title:t.title,date:t.date,time:t.time,done:t.done};})})})
+    api('/assist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,today:iso(now),weekday:WD[now.getDay()],now:pad(now.getHours())+':'+pad(now.getMinutes()),last:aiLast,hist:aiHist.slice(-6),tasks:open.concat(recent).map(function(t){return {id:t.id,title:t.title,date:t.date,time:t.time,done:t.done};})})})
     .then(function(r){
       var res=aiApply(r.actions), h=esc(r.reply||(res.done.length?'Готово.':'Не разбрах, опитай пак.'))+(res.done.length?'<div style="margin-top:6px;font-size:14px">'+res.done.map(esc).join('<br>')+'</div><button class="chip" type="button" id="ai-undo" style="margin-top:8px;min-height:36px;padding:6px 12px">Отмени</button>':'');
-      wait.innerHTML=h; aiLog.push({r:'a',h:h.replace(/<button[\s\S]*?<\/button>/,'')});
+      wait.innerHTML=h; aiLog.push({r:'a',h:h.replace(/<button[\s\S]*?<\/button>/,'')}); aiHist.push({r:'u',t:text},{r:'a',t:r.reply||''});
       var u=wait.querySelector('#ai-undo'); if(u) u.onclick=function(){ tasks=res.snap; persist(); render(); u.remove(); toast('Върнато'); };
     }).catch(function(){
-      if(/^(добави|нова)/i.test(text)||true){ var ok=addFrom(text); wait.textContent=ok?'Асистентът не е наличен, добавих го като обикновена задача.':'Асистентът не е наличен.'; }
+      wait.innerHTML='Асистентът не отговори. <button class="chip" type="button" id="ai-plain" style="margin-top:8px;min-height:36px;padding:6px 12px">Добави като обикновена задача</button>';
+      wait.querySelector('#ai-plain').onclick=function(){ if(addFrom(text)){ wait.textContent='Добавено като обикновена задача.'; } };
     });
   }
   $('#ai-f').addEventListener('submit',function(e){ e.preventDefault(); send($('#ai-in').value); });
