@@ -475,6 +475,31 @@ textarea.fin{height:auto;min-height:110px;padding:12px 14px;resize:none;line-hei
 .dst.ok{color:var(--ok)}
 .wic{background:linear-gradient(160deg,color-mix(in srgb,var(--mid) 70%,#fff),var(--mid))}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* ---------- Версия за лаптоп ---------- */
+@media (min-width:1000px) and (hover:hover){
+  body{font-size:16px}
+  .wrap,.navin,.bar form{max-width:1240px}
+  .navin{height:56px}
+  .navtitle{display:none}
+  .mbtn,.menuback{display:none!important}
+  .tools,.tools.open{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:2px;min-width:0;max-width:none;padding:0;background:transparent;box-shadow:none;animation:none;margin-left:auto}
+  .tools .tbtn{width:auto;min-height:44px;padding:0 11px;gap:0;color:var(--accent)}
+  .tools .tbtn::after{content:none}
+  .tools #spread{padding:0 14px;font-size:15px;font-weight:600}
+  .tools .tbtn:hover{background:var(--wash);border-radius:12px}
+  body:not([data-view=cal]) #list{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:36px;align-items:start}
+  body[data-view=cal] .wrap{max-width:860px}
+  #list>*{min-width:0}
+  #list>.cal,#list>.calwrap,#list>.empty,#list>.full{grid-column:1/-1}
+  .scrim{align-items:center}
+  .sheet{max-width:760px;border-radius:26px;max-height:88vh;padding-bottom:22px;animation:fadein .25s both}
+  .sheet:has(.sgrid),.sheet:has(.ptab){max-width:1120px}
+  .scrim.side{align-items:stretch}
+  .scrim.side .sheet{max-height:none;border-radius:26px 0 0 26px;animation:sidein .4s var(--spring) both}
+  .row:hover,li:hover>.row{background:var(--wash)}
+  .kbd{display:inline-block;padding:1px 6px;border-radius:6px;background:var(--wash);font-size:12px;color:var(--muted);margin-left:8px}
+}
 </style>
 
 <header class="nav" id="nav">
@@ -509,7 +534,7 @@ textarea.fin{height:auto;min-height:110px;padding:12px 14px;resize:none;line-hei
       <button class="tbtn" id="obtn" aria-label="Пари за вземане" title="Пари за вземане">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.2c-.5-.8-1.4-1.2-2.5-1.2-1.4 0-2.4.7-2.4 1.8 0 2.5 5 1.2 5 3.9 0 1.2-1.1 2-2.6 2-1.1 0-2.1-.5-2.6-1.4M12 6.5V8m0 8v1.5"/></svg>
       </button>
-      <button class="tbtn" id="hbtn" aria-label="Хора и задачи" title="Хора и задачи">
+      <button class="tbtn" id="pplbtn" aria-label="Хора и задачи" title="Хора и задачи">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.3c1.9.8 3 2.6 3 5.7"/></svg>
       </button>
       <button class="tbtn" id="sbtn" aria-label="Разходи" title="Разходи">
@@ -884,6 +909,7 @@ function calView(todayIso,open){
   return h;
 }
 function render(){
+  try{ document.body.dataset.view=view; }catch(e){}
   rowIdx=0; grpIdx=0;
   var todayIso=iso(new Date()), tomIso=iso(addDays(new Date(),1));
   var open=tasks.filter(function(t){return !t.done;}).sort(cmp);
@@ -2065,10 +2091,17 @@ function peoplePanel(){
 }
 function loadAssigned(){ api('/assigned').then(function(r){ hpAssigned=r.items||[]; if(!$('#scrim').hidden&&$('#hp-close')) peoplePanel(); }).catch(function(){}); }
 function openPeople(){ var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.remove('side'); sc.innerHTML='<div class="sheet" role="dialog" aria-label="Хора и задачи"></div>'; peoplePanel(); syncPeople(); loadAssigned(); }
-$('#hbtn').addEventListener('click',openPeople);
+$('#pplbtn').addEventListener('click',openPeople);
 setTimeout(function(){ syncPeople(); pullInbox(); },2500);
 setInterval(pullInbox,30000);
 document.addEventListener('visibilitychange',function(){ if(!document.hidden) pullInbox(); });
+
+document.addEventListener('keydown',function(e){
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  var t=e.target, typing=t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable);
+  if(typing||!$('#scrim').hidden) return;
+  if(e.key==='n'||e.key==='/'||e.key==='н'){ e.preventDefault(); var f=$('#in'); if(f) f.focus(); }
+});
 function openIdeas(){
   var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.add('side');
   sc.innerHTML='<div class="sheet" role="dialog" aria-label="Идеи"></div>'; ideasPanel();
