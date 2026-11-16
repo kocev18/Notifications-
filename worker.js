@@ -301,6 +301,26 @@ export default {
       const r = await sendPush(env, JSON.parse(raw), { title: '📋 Задачи', body: '🟢 Тест: известията работят', url: './' });
       return json(r, r.status < 300 ? 200 : 502);
     }
+    if (url.pathname === '/assist' && req.method === 'POST') {
+      if (!env.AI) return json({ error: 'no ai' }, 501);
+      const b = await req.json();
+      const text = String(b.text || '').slice(0, 1500);
+      const list = (b.tasks || []).slice(0, 80).map((t) => [t.id, t.title, t.date || '-', t.time || '-', t.done ? 'готова' : 'отворена'].join(' | ')).join('\n');
+      const sys = 'Ти си асистент в приложение за задачи. Потребителят говори на български. Днес е ' + b.today + ' (' + b.weekday + '), часът е ' + b.now + '.\n' +
+        'Отговори САМО с един JSON обект без друг текст: {"reply":"кратък отговор на български","actions":[...]}.\n' +
+        'Действия: {"op":"add","title":"...","date":"YYYY-MM-DD или празно","time":"HH:MM или празно","prio":1|2|3} ; {"op":"done","id":"..."} ; {"op":"delete","id":"..."} ; {"op":"move","id":"...","date":"YYYY-MM-DD","time":"HH:MM или празно"} ; {"op":"rename","id":"...","title":"..."}.\n' +
+        'Правила: датите ги изчислявай от днешната дата („утре“, „в петък“, „след 2 дни“ — най-близкия бъдещ ден). Използвай id само от списъка. Ако потребителят само пита (какво имам утре, колко…), actions е [] и отговаряш в reply по списъка. Не измисляй задачи, които не са поискани. Заглавието да е кратко, без думите за дата и час.\n' +
+        'Текущи задачи (id | заглавие | дата | час | статус):\n' + (list || '(няма)');
+      const msgs = [{ role: 'system', content: sys }, { role: 'user', content: text }];
+      let r;
+      try { r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: msgs, max_tokens: 900 }); }
+      catch (e) { try { r = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', { messages: msgs, max_tokens: 900 }); } catch (e2) { return json({ error: String(e2 && e2.message || e2) }, 502); } }
+      const raw = typeof r.response === 'string' ? r.response : JSON.stringify(r.response || {});
+      let out = null;
+      try { const m = raw.match(/\{[\s\S]*\}/); out = JSON.parse(m ? m[0] : raw); } catch (e) {}
+      if (!out || typeof out !== 'object') return json({ reply: raw.slice(0, 400) || 'Не разбрах, опитай по друг начин.', actions: [] });
+      return json({ reply: String(out.reply || ''), actions: Array.isArray(out.actions) ? out.actions.slice(0, 12) : [] });
+    }
     if (url.pathname === '/ai' && req.method === 'POST') {
       if (!env.AI) return json({ error: 'no ai' }, 501);
       const b = await req.json();

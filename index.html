@@ -508,6 +508,9 @@ textarea.fin{height:auto;min-height:110px;padding:12px 14px;resize:none;line-hei
     <button class="mbtn" id="mbtn" aria-label="Меню" aria-expanded="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="19" cy="12" r="1.2" fill="currentColor"/></svg></button>
     <div class="menuback" id="menuback"></div>
     <div class="tools" id="tools">
+      <button class="tbtn" id="aibtn" aria-label="Асистент" title="Асистент">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18.5 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+      </button>
       <button class="tbtn" id="spread" title="Разпредели задачите без дата">Разпредели</button>
       <button class="tbtn" id="hbtn" aria-label="Часове Ред Хот" title="Часове Ред Хот">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -2148,6 +2151,49 @@ function accPanel(){
 function loadAcc(){ if(CFG.token&&CFG.token.indexOf('u.')===0){ acList=null; accPanel(); return; } api('/accounts').then(function(r){ acList=r.names||[]; if($('#ac-close')) accPanel(); }).catch(function(){}); }
 function openAcc(){ var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.remove('side'); sc.innerHTML='<div class="sheet" role="dialog" aria-label="Профили"></div>'; accPanel(); loadAcc(); }
 $('#acbtn').addEventListener('click',openAcc);
+
+/* ---------- Асистент ---------- */
+var aiLog=[];
+function aiApply(acts){
+  var done=[], snap=clone(tasks), WD=['неделя','понеделник','вторник','сряда','четвъртък','петък','събота'];
+  (acts||[]).forEach(function(a){
+    var t=a.id?tasks.find(function(x){return x.id===a.id;}):null, okD=/^\d{4}-\d{2}-\d{2}$/.test(a.date||''), okT=/^\d{2}:\d{2}$/.test(a.time||'');
+    if(a.op==='add'&&a.title){ var p=parse(String(a.title)); var n={id:rid(),title:String(a.title).slice(0,200),date:okD?a.date:'',time:okT?a.time:'',prio:[1,2,3].includes(+a.prio)?+a.prio:p.prio,cat:p.cat,notify:true,done:false,created:Date.now()}; tasks.unshift(n); done.push('➕ '+n.title+(n.date?' · '+fmtDate(n.date)+(n.time?' '+n.time:''):'')); }
+    else if(a.op==='done'&&t){ t.done=true; t.doneAt=Date.now(); done.push('✅ '+t.title); }
+    else if(a.op==='delete'&&t){ tasks=tasks.filter(function(x){return x!==t;}); done.push('🗑 '+t.title); }
+    else if(a.op==='move'&&t&&okD){ t.date=a.date; t.time=okT?a.time:''; done.push('📅 '+t.title+' → '+fmtDate(a.date)+(t.time?' '+t.time:'')); }
+    else if(a.op==='rename'&&t&&a.title){ t.title=String(a.title).slice(0,200); done.push('✏️ '+t.title); }
+  });
+  if(done.length){ persist(); render(); }
+  return {done:done,snap:snap};
+}
+function aiPanel(){
+  var sh=document.querySelector('#scrim .sheet'); if(!sh) return;
+  sh.innerHTML='<div class="grab"></div><h3>✨ Асистент</h3><div id="ai-log" style="display:grid;gap:10px;max-height:46vh;overflow:auto"></div>'+
+    '<div id="ai-ex" class="chips">'+['Утре в 10 ме подсети да се обадя на Алекс','Какво имам тази седмица?','Премести „Нарежи дърва“ за петък','Готово е с тока'].map(function(x){return '<button class="chip" type="button">'+esc(x)+'</button>';}).join('')+'</div>'+
+    '<form id="ai-f" style="display:flex;gap:8px"><input class="field" id="ai-in" placeholder="Кажи ми с думи какво искаш…" autocomplete="off" style="min-height:48px"><button class="go" type="submit" aria-label="Изпрати" style="width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;flex:none">➤</button></form>';
+  var log=$('#ai-log');
+  function bub(who,html,extra){ var d=document.createElement('div'); d.style.cssText='padding:10px 14px;border-radius:16px;max-width:92%;white-space:pre-wrap;'+(who==='u'?'background:var(--accent);color:#fff;justify-self:end':'background:var(--wash)'); d.innerHTML=html; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
+  aiLog.forEach(function(m){ bub(m.r,m.h); });
+  function send(text){
+    text=text.trim(); if(!text) return; $('#ai-ex').style.display='none'; bub('u',esc(text)); aiLog.push({r:'u',h:esc(text)}); $('#ai-in').value='';
+    var wait=bub('a','…'), now=new Date(), WD=['неделя','понеделник','вторник','сряда','четвъртък','петък','събота'];
+    var open=tasks.filter(function(t){return !t.done;}), recent=tasks.filter(function(t){return t.done;}).slice(0,10);
+    api('/assist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,today:iso(now),weekday:WD[now.getDay()],now:pad(now.getHours())+':'+pad(now.getMinutes()),tasks:open.concat(recent).map(function(t){return {id:t.id,title:t.title,date:t.date,time:t.time,done:t.done};})})})
+    .then(function(r){
+      var res=aiApply(r.actions), h=esc(r.reply||(res.done.length?'Готово.':'Не разбрах, опитай пак.'))+(res.done.length?'<div style="margin-top:6px;font-size:14px">'+res.done.map(esc).join('<br>')+'</div><button class="chip" type="button" id="ai-undo" style="margin-top:8px;min-height:36px;padding:6px 12px">Отмени</button>':'');
+      wait.innerHTML=h; aiLog.push({r:'a',h:h.replace(/<button[\s\S]*?<\/button>/,'')});
+      var u=wait.querySelector('#ai-undo'); if(u) u.onclick=function(){ tasks=res.snap; persist(); render(); u.remove(); toast('Върнато'); };
+    }).catch(function(){
+      if(/^(добави|нова)/i.test(text)||true){ var ok=addFrom(text); wait.textContent=ok?'Асистентът не е наличен, добавих го като обикновена задача.':'Асистентът не е наличен.'; }
+    });
+  }
+  $('#ai-f').addEventListener('submit',function(e){ e.preventDefault(); send($('#ai-in').value); });
+  $('#ai-ex').querySelectorAll('.chip').forEach(function(c){ c.onclick=function(){ $('#ai-in').value=c.textContent; $('#ai-in').focus(); }; });
+  setTimeout(function(){ try{ $('#ai-in').focus(); }catch(e){} },200);
+}
+function openAI(){ var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.remove('side'); sc.innerHTML='<div class="sheet" role="dialog" aria-label="Асистент"></div>'; aiPanel(); }
+$('#aibtn').addEventListener('click',openAI);
 function openIdeas(){
   var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.add('side');
   sc.innerHTML='<div class="sheet" role="dialog" aria-label="Идеи"></div>'; ideasPanel();
