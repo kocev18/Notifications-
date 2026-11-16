@@ -971,6 +971,7 @@ function summary(t){
   var p=[]; if(t.date) p.push(fmtDate(t.date)+(t.time?', '+t.time:'')); else p.push('без дата');
   p.push(t.cat); p.push(PN[t.prio].toLowerCase()); return p.join(' · ');
 }
+var AICMD=/^(копирай|дублирай|клонирай|смени|промени|премести|измести|изтрий|махни|отбележи|готово|свърших|завърши|какво|колко|покажи|кажи|направи|сложи|добави и|asistent|асистент)/i;
 function addFrom(text){
   text=text.trim(); if(!text) return false;
   var p=parse(text);
@@ -984,6 +985,7 @@ function addFrom(text){
 }
 $('#add').addEventListener('submit',function(e){
   e.preventDefault(); var inp=$('#in');
+  if(AICMD.test(inp.value.trim())){ var cmd=inp.value.trim(); inp.value=''; inp.blur(); openAI(); setTimeout(function(){ var ai=$('#ai-in'); if(ai){ ai.value=cmd; $('#ai-f').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true})); } },120); return; }
   if(addFrom(inp.value)) inp.value='';
 });
 
