@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="bg"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Задачи"><meta name="theme-color" content="#F2F2F7">
+<link rel="manifest" href="manifest-p.webmanifest"><link rel="apple-touch-icon" href="icon2-180.png">
+<title>Задачи</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:16px -apple-system,system-ui,sans-serif;background:#F2F2F7;color:#111;padding:max(20px,env(safe-area-inset-top)) 16px 40px}
+main{max-width:520px;margin:0 auto}
+h1{font-size:26px;margin:8px 0 4px}p.s{color:#666;margin:0 0 18px;font-size:14px}
+.card{background:#fff;border-radius:16px;padding:14px;margin-bottom:14px}
+textarea{width:100%;border:0;font:inherit;resize:none;min-height:84px;outline:none;background:transparent}
+button{font:inherit;font-weight:600;border:0;border-radius:12px;padding:12px 16px;background:#111;color:#fff;width:100%}
+button.g{background:#e5e5ea;color:#111}
+.t{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid #eee}.t:first-of-type{border-top:0}
+.t input{width:22px;height:22px;margin-top:2px}.t.d span{text-decoration:line-through;color:#999}
+h2{font-size:15px;margin:0 0 6px;color:#555}.err{color:#c00;text-align:center;margin-top:40px}
+</style></head><body><main id="m"><p class="s">Зареждане…</p></main>
+<script>
+var API='https://zadachi.a-kkocev.workers.dev', q=new URLSearchParams(location.search), K=q.get('k')||'', A=q.get('a'); if(A) API=A;
+try{ if(K) localStorage.setItem('pk',K); else K=localStorage.getItem('pk')||''; }catch(e){}
+var m=document.getElementById('m');
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function j(path,body){ return fetch(API+path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }); }
+function b64u(s){ s=(s+'===').slice(0,s.length+(4-s.length%4)%4).replace(/-/g,'+').replace(/_/g,'/'); var r=atob(s),a=new Uint8Array(r.length); for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i); return a; }
+var VAPID='BM79tK549nXqcAxRszfTvkTleUBpAv_0zkT9QqrKXjJVCRucZ1MjCMtJSXTf_Xa87XVu1Awv7cxyKH9W7ygB8TU', data=null;
+function draw(){
+  var ts=data.tasks||[], push=('Notification' in window)&&Notification.permission==='granted';
+  m.innerHTML='<h1>Здравей, '+esc(data.name)+'</h1><p class="s">Напиши задача към Сашо — ще му дойде веднага.</p>'+
+   '<div class="card"><textarea id="tx" placeholder="напр. вземи жена от магазин Тунджа в неделя"></textarea><button id="go">Изпрати</button></div>'+
+   '<div class="card"><h2>Задачи от Сашо</h2>'+(ts.length?ts.map(function(t){return '<label class="t'+(t.done?' d':'')+'"><input type="checkbox" data-id="'+t.id+'"'+(t.done?' checked':'')+'><span>'+esc(t.title)+'</span></label>';}).join(''):'<p class="s" style="margin:0">Засега няма.</p>')+'</div>'+
+   (push?'':'<button class="g" id="nt">🔔 Включи известия</button>');
+  document.getElementById('go').onclick=function(){ var v=document.getElementById('tx').value.trim(); if(!v) return; var b=this; b.disabled=true; j('/in',{code:K,text:v}).then(function(){ document.getElementById('tx').value=''; b.textContent='✓ Изпратено'; setTimeout(function(){b.textContent='Изпрати';b.disabled=false;},1800); }).catch(function(){ b.disabled=false; alert('Не се изпрати, опитай пак.'); }); };
+  m.querySelectorAll('input[data-id]').forEach(function(c){ c.onchange=function(){ j('/mine/done',{code:K,id:c.dataset.id,done:c.checked}).then(load).catch(function(){}); }; });
+  var nt=document.getElementById('nt'); if(nt) nt.onclick=enable;
+}
+function enable(){
+  Notification.requestPermission().then(function(p){ if(p!=='granted') return alert('Известията не са разрешени. На iPhone първо добави страницата на началния екран (Сподели → Добави към начален екран), после я отвори оттам.'); return navigator.serviceWorker.register('sw.js').then(function(){return navigator.serviceWorker.ready;}).then(function(reg){ return reg.pushManager.getSubscription().then(function(s){return s||reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID)});}); }).then(function(s){ return j('/psub',{code:K,sub:s.toJSON()}); }).then(draw); }).catch(function(){ alert('Не стана. На iPhone трябва първо да добавиш страницата на началния екран.'); });
+}
+function load(){ return j('/mine?k='+encodeURIComponent(K)).then(function(d){ data=d; draw(); }).catch(function(){ if(!data) m.innerHTML='<p class="err">Линкът не е валиден.<br>Поискай нов от Сашо.</p>'; }); }
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+if(!K) m.innerHTML='<p class="err">Липсва личен линк.</p>'; else { load(); setInterval(load,30000); }
+</script></body></html>

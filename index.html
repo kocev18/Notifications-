@@ -509,6 +509,9 @@ textarea.fin{height:auto;min-height:110px;padding:12px 14px;resize:none;line-hei
       <button class="tbtn" id="obtn" aria-label="Пари за вземане" title="Пари за вземане">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.2c-.5-.8-1.4-1.2-2.5-1.2-1.4 0-2.4.7-2.4 1.8 0 2.5 5 1.2 5 3.9 0 1.2-1.1 2-2.6 2-1.1 0-2.1-.5-2.6-1.4M12 6.5V8m0 8v1.5"/></svg>
       </button>
+      <button class="tbtn" id="hbtn" aria-label="Хора и задачи" title="Хора и задачи">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.3c1.9.8 3 2.6 3 5.7"/></svg>
+      </button>
       <button class="tbtn" id="sbtn" aria-label="Разходи" title="Разходи">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/></svg>
       </button>
@@ -1996,6 +1999,76 @@ function owedPanel(){
 }
 function openOwed(){ var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.remove('side'); sc.innerHTML='<div class="sheet" role="dialog" aria-label="Пари за вземане"></div>'; owedPanel(); }
 $('#obtn').addEventListener('click',openOwed);
+
+/* ---------- Хора и задачи ---------- */
+var PAGE_URL=location.href.replace(/[^\/]*([?#].*)?$/,'')+'p.html';
+var hpDay=null, hpAssigned=[];
+function pCode(p){ if(!p.code){ var a=new Uint8Array(8); crypto.getRandomValues(a); p.code=Array.prototype.map.call(a,function(x){return (x%36).toString(36);}).join(''); persist(); } return p.code; }
+function pLink(p){ return PAGE_URL+'?k='+pCode(p); }
+function cellFor(pid,dIso){ var mk=mondayOf(dIso), w=sched.weeks[mk], i=(fromIso(dIso).getDay()+6)%7, v=w&&w[pid]?w[pid][i]:null; if(!v) return null; if(typeof v==='string') return {c:v,h:'',n:''}; return (v.c||v.h||v.n)?{c:v.c||'',h:v.h||'',n:v.n||''}:null; }
+function syncPeople(){
+  if(!CFG.api||!CFG.token) return;
+  var m={}; sched.people.forEach(function(p){ m[pCode(p)]={id:p.id,name:p.name}; });
+  var s=JSON.stringify(m); if(s===ui.peopleSent) return;
+  api('/people',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({people:m})}).then(function(){ ui.peopleSent=s; try{lsSet();}catch(e){} }).catch(function(){});
+}
+function pullInbox(){
+  if(!CFG.api||!CFG.token) return;
+  if(dirty||saving){ setTimeout(pullInbox,2500); return; }
+  api('/inbox').then(function(r){
+    var items=(r.items||[]).filter(function(x){return !(ui.inSeen||[]).includes(x.id);}); 
+    if(items.length){
+      items.forEach(function(x){
+        var p=parse(x.text), t={id:rid(),title:p.title+' (от '+x.name+')',date:p.date,time:p.time,prio:p.prio,cat:p.cat,notify:true,done:false,created:Date.now()};
+        tasks.unshift(t); ui.inSeen=(ui.inSeen||[]).concat(x.id).slice(-200);
+      });
+      persist(); render(); toast('📥 '+items.length+' нова задача от други');
+    }
+    var ids=(r.items||[]).map(function(x){return x.id;});
+    if(ids.length) api('/inbox/ack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids})}).catch(function(){});
+  }).catch(function(){});
+}
+function peoplePanel(){
+  var sh=document.querySelector('#scrim .sheet'); if(!sh) return;
+  if(!hpDay) hpDay=iso(new Date());
+  var d=fromIso(hpDay), DN=['Неделя','Понеделник','Вторник','Сряда','Четвъртък','Петък','Събота'];
+  var on=[], off=[];
+  sched.people.forEach(function(p){ var c=cellFor(p.id,hpDay); (c?on:off).push({p:p,c:c}); });
+  function car(id){ var x=cars&&sched.cars.find(function(k){return k.id===id;}); return x?x.n:''; }
+  function row(o){
+    var p=o.p, c=o.c, info=c?[(c.h||''),(car(c.c)||c.c),(c.n||'')].filter(Boolean).join(' · '):'не е на смяна';
+    var tel=(p.phone||'').replace(/[^\d+]/g,'');
+    return '<div class="sprow" style="flex-wrap:wrap;gap:6px"><span class="sn2" style="flex:1 1 100%"><b>'+esc(p.name)+'</b> <span style="opacity:.6;font-size:12px">'+esc(info)+'</span></span>'+
+      '<input class="in" data-ph="'+p.id+'" type="tel" inputmode="tel" placeholder="телефон" value="'+esc(p.phone||'')+'" style="flex:1 1 120px;min-width:0">'+
+      (tel?'<a class="btn" href="tel:'+tel+'" style="text-decoration:none">📞</a>':'')+
+      '<button class="btn" data-as="'+p.id+'" type="button">Задача</button>'+
+      '<button class="btn" data-ln="'+p.id+'" type="button">Линк</button></div>';
+  }
+  sh.innerHTML='<div class="grab"></div><h3>Хора и задачи</h3>'+
+    '<div class="hhead"><strong>'+DN[d.getDay()]+', '+d.getDate()+'.'+pad(d.getMonth()+1)+'</strong><div style="display:flex"><button class="cbtn" data-hd="-1" aria-label="Предишен ден">‹</button><button class="cbtn" data-hd="1" aria-label="Следващ ден">›</button></div></div>'+
+    '<div class="mh"><strong>На смяна</strong><span>'+on.length+'</span></div>'+(on.length?on.map(row).join(''):'<p class="note">Никой не е записан в графика за този ден.</p>')+
+    (off.length?'<div class="mh"><strong>Останалите</strong><span>'+off.length+'</span></div>'+off.map(row).join(''):'')+
+    (hpAssigned.length?'<div class="mh"><strong>Възложени</strong></div>'+hpAssigned.slice(-8).reverse().map(function(a){var pp=sched.people.find(function(x){return x.id===a.pid;}); return '<div class="sprow"><span class="sn2">'+(a.done?'✅ ':'⏳ ')+esc(a.title)+' — '+esc(pp?pp.name:'')+'</span></div>';}).join(''):'')+
+    '<p class="note">„Линк“ копира личен линк за човека: чрез него той ти пише задачи и получава твоите. Той не вижда графика, парите или часовете ти. Който има линка, може да ти пише — не го давай на други.</p>'+
+    '<div class="acts"><button class="btn" id="hp-close" type="button" style="flex:1">Затвори</button></div>';
+  $('#hp-close').onclick=closeSheet;
+  sh.querySelectorAll('[data-hd]').forEach(function(b){ b.onclick=function(){ hpDay=iso(addDays(fromIso(hpDay),+b.dataset.hd)); peoplePanel(); }; });
+  sh.querySelectorAll('[data-ph]').forEach(function(i){ i.addEventListener('change',function(){ var p=sched.people.find(function(x){return x.id===i.dataset.ph;}); if(p){ p.phone=i.value.trim(); persist(); peoplePanel(); } }); });
+  sh.querySelectorAll('[data-ln]').forEach(function(b){ b.onclick=function(){ var p=sched.people.find(function(x){return x.id===b.dataset.ln;}); var u=pLink(p); syncPeople();
+    if(navigator.share){ navigator.share({title:'Задачи',text:'Линк за задачи, '+p.name+':',url:u}).catch(function(){}); }
+    else { try{ navigator.clipboard.writeText(u); toast('Линкът е копиран'); }catch(e){ prompt('Линк:',u); } } }; });
+  sh.querySelectorAll('[data-as]').forEach(function(b){ b.onclick=function(){ var p=sched.people.find(function(x){return x.id===b.dataset.as;}); var t=prompt('Задача за '+p.name+':',''); if(!t||!t.trim()) return; syncPeople();
+    api('/assign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:p.id,title:t.trim()})}).then(function(r){
+      toast(r.pushed?'Изпратено на '+p.name:'Записано. '+p.name+' още няма включени известия — прати му линка','Прати',function(){ var tel=(p.phone||'').replace(/[^\d+]/g,''); location.href='sms:'+tel+(/iPhone|iPad/.test(navigator.userAgent)?'&':'?')+'body='+encodeURIComponent(t.trim()+' '+pLink(p)); });
+      loadAssigned();
+    }).catch(function(){ toast('Грешка — опитай пак'); }); }; });
+}
+function loadAssigned(){ api('/assigned').then(function(r){ hpAssigned=r.items||[]; if(!$('#scrim').hidden&&$('#hp-close')) peoplePanel(); }).catch(function(){}); }
+function openPeople(){ var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.remove('side'); sc.innerHTML='<div class="sheet" role="dialog" aria-label="Хора и задачи"></div>'; peoplePanel(); syncPeople(); loadAssigned(); }
+$('#hbtn').addEventListener('click',openPeople);
+setTimeout(function(){ syncPeople(); pullInbox(); },2500);
+setInterval(pullInbox,30000);
+document.addEventListener('visibilitychange',function(){ if(!document.hidden) pullInbox(); });
 function openIdeas(){
   var sc=$('#scrim'); sc.hidden=false; sc.classList.remove('closing'); sc.classList.add('side');
   sc.innerHTML='<div class="sheet" role="dialog" aria-label="Идеи"></div>'; ideasPanel();

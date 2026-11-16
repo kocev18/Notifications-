@@ -114,11 +114,112 @@ async function runDue(env) {
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS' };
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
+
+// ---------- Хора: входящи съобщения и възлагане ----------
+const okCode = (c) => typeof c === 'string' && /^[a-z0-9]{6,20}$/.test(c);
+const kvJson = async (env, k, d) => { const r = await env.KV.get(k); return r ? JSON.parse(r) : d; };
+async function pushOwner(env, payload) {
+  const raw = await env.KV.get('sub'); if (!raw) return null;
+  const r = await sendPush(env, JSON.parse(raw), payload);
+  if (r.status === 404 || r.status === 410) await env.KV.delete('sub');
+  return r.status;
+}
+async function personByCode(env, code) {
+  if (!okCode(code)) return null;
+  const people = await kvJson(env, 'people', {});
+  return people[code] || null;
+}
+
+async function publicRoute(req, env, url) {
+  const p = url.pathname;
+  if (p === '/hi' && req.method === 'GET') {
+    const who = await personByCode(env, url.searchParams.get('k'));
+    return who ? json({ name: who.name }) : json({ error: 'unknown' }, 404);
+  }
+  if (p === '/in' && req.method === 'POST') {
+    const b = await req.json(); const who = await personByCode(env, b.code);
+    if (!who) return json({ error: 'unknown' }, 404);
+    const text = String(b.text || '').trim().slice(0, 500);
+    if (!text) return json({ error: 'empty' }, 400);
+    const inbox = await kvJson(env, 'inbox', []);
+    if (inbox.filter((x) => x.pid === who.id).length >= 30) return json({ error: 'too many' }, 429);
+    inbox.push({ id: crypto.randomUUID().slice(0, 8), pid: who.id, name: who.name, text, at: Date.now() });
+    await env.KV.put('inbox', JSON.stringify(inbox.slice(-100)));
+    await pushOwner(env, { title: '📥 ' + who.name, body: text, tag: 'in-' + who.id, url: './?inbox=1' });
+    return json({ ok: true });
+  }
+  if (p === '/mine' && req.method === 'GET') {
+    const who = await personByCode(env, url.searchParams.get('k'));
+    if (!who) return json({ error: 'unknown' }, 404);
+    const assigned = (await kvJson(env, 'assigned', [])).filter((x) => x.pid === who.id).slice(-30).reverse();
+    return json({ name: who.name, tasks: assigned.map((x) => ({ id: x.id, title: x.title, at: x.at, done: !!x.done })) });
+  }
+  if (p === '/mine/done' && req.method === 'POST') {
+    const b = await req.json(); const who = await personByCode(env, b.code);
+    if (!who) return json({ error: 'unknown' }, 404);
+    const assigned = await kvJson(env, 'assigned', []);
+    const t = assigned.find((x) => x.id === b.id && x.pid === who.id);
+    if (!t) return json({ error: 'no task' }, 404);
+    t.done = b.done === false ? false : true; t.doneAt = Date.now();
+    await env.KV.put('assigned', JSON.stringify(assigned));
+    if (t.done) await pushOwner(env, { title: '✅ ' + who.name, body: 'Готово: ' + t.title, tag: 'done-' + t.id, url: './' });
+    return json({ ok: true });
+  }
+  if (p === '/psub' && req.method === 'POST') {
+    const b = await req.json(); const who = await personByCode(env, b.code);
+    if (!who || !b.sub || !b.sub.endpoint) return json({ error: 'bad' }, 400);
+    const subs = await kvJson(env, 'psubs', {}); subs[who.id] = b.sub;
+    await env.KV.put('psubs', JSON.stringify(subs));
+    await sendPush(env, b.sub, { title: '📋 Задачи', body: '🟢 Известията са включени, ' + who.name, url: './p.html?k=' + b.code });
+    return json({ ok: true });
+  }
+  return null;
+}
+
+async function ownerRoute(req, env, url) {
+  const p = url.pathname;
+  if (p === '/people' && req.method === 'PUT') {
+    const b = await req.json(); const clean = {};
+    Object.keys(b.people || {}).forEach((c) => { if (okCode(c) && b.people[c] && b.people[c].id) clean[c] = { id: String(b.people[c].id), name: String(b.people[c].name || '').slice(0, 60) }; });
+    await env.KV.put('people', JSON.stringify(clean));
+    return json({ ok: true, n: Object.keys(clean).length });
+  }
+  if (p === '/inbox' && req.method === 'GET') return json({ items: await kvJson(env, 'inbox', []) });
+  if (p === '/inbox/ack' && req.method === 'POST') {
+    const b = await req.json(); const ids = new Set(b.ids || []);
+    const inbox = (await kvJson(env, 'inbox', [])).filter((x) => !ids.has(x.id));
+    await env.KV.put('inbox', JSON.stringify(inbox));
+    return json({ ok: true });
+  }
+  if (p === '/assign' && req.method === 'POST') {
+    const b = await req.json(); const title = String(b.title || '').trim().slice(0, 300);
+    if (!b.pid || !title) return json({ error: 'bad' }, 400);
+    const assigned = await kvJson(env, 'assigned', []);
+    const t = { id: crypto.randomUUID().slice(0, 8), pid: String(b.pid), title, at: Date.now(), done: false };
+    assigned.push(t); await env.KV.put('assigned', JSON.stringify(assigned.slice(-200)));
+    const subs = await kvJson(env, 'psubs', {}); const people = await kvJson(env, 'people', {});
+    const code = Object.keys(people).find((c) => people[c].id === t.pid);
+    let pushed = false;
+    if (subs[t.pid] && code) {
+      const r = await sendPush(env, subs[t.pid], { title: '📋 Задача от Сашо', body: title, tag: 'as-' + t.id, url: './p.html?k=' + code });
+      pushed = r.status < 300;
+      if (r.status === 404 || r.status === 410) { delete subs[t.pid]; await env.KV.put('psubs', JSON.stringify(subs)); }
+    }
+    return json({ ok: true, id: t.id, pushed, code: code || null });
+  }
+  if (p === '/assigned' && req.method === 'GET') return json({ items: (await kvJson(env, 'assigned', [])).slice(-60) });
+  return null;
+}
+
 export default {
   async fetch(req, env) {
     if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(req.url);
+    const pub = await publicRoute(req, env, url);
+    if (pub) return pub;
     if (req.headers.get('Authorization') !== 'Bearer ' + env.TOKEN) return json({ error: 'unauthorized' }, 401);
+    const own = await ownerRoute(req, env, url);
+    if (own) return own;
     if (url.pathname === '/state' && req.method === 'GET') {
       const raw = await env.KV.get('state');
       return json(raw ? JSON.parse(raw) : { rev: 0, state: null });
