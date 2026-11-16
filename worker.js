@@ -287,8 +287,16 @@ export default {
       const raw = await env.KV.get('state');
       return json(raw ? JSON.parse(raw) : { rev: 0, state: null });
     }
+    if (url.pathname === '/backup' && req.method === 'GET') { const r = await env.KV.get('bak'); return json(r ? JSON.parse(r) : { error: 'none' }); }
     if (url.pathname === '/state' && req.method === 'PUT') {
       const b = await req.json(); const rev = Date.now();
+      const hasData = (s) => !!s && ((s.tasks && s.tasks.length) || Object.keys(s.hours || {}).length || Object.keys((s.sched && s.sched.weeks) || {}).length || Object.keys(s.spend || {}).length || (s.ideas && s.ideas.length));
+      const curRaw = await env.KV.get('state'); const cur = curRaw ? JSON.parse(curRaw) : null;
+      if (cur && hasData(cur.state) && !hasData(b.state)) return json({ error: 'refuse empty overwrite' }, 409);
+      if (cur && hasData(cur.state)) {
+        const bakAt = +(await env.KV.get('bak_at') || 0);
+        if (rev - bakAt > 10 * 60 * 1000) { await env.KV.put('bak', curRaw); await env.KV.put('bak_at', String(rev)); }
+      }
       await env.KV.put('state', JSON.stringify({ rev, state: b.state }));
       return json({ rev });
     }

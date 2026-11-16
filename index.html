@@ -727,7 +727,7 @@ function flush(){
   saving=true; dirty=false;
   api('/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:snapshot()})})
    .then(function(r){ rev=r.rev; try{localStorage.setItem('zadachi.rev',String(rev));}catch(e){} })
-   .catch(function(e){ dirty=true; })
+   .catch(function(e){ if(String(e&&e.message).indexOf('409')>-1){ dirty=false; try{localStorage.removeItem('zadachi.pend');}catch(x){} setTimeout(function(){ pull(true); },100); } else dirty=true; })
    .then(function(){ saving=false; if(dirty){clearTimeout(saveTimer);saveTimer=setTimeout(flush,2000);}else{ try{localStorage.removeItem('zadachi.pend');}catch(e){} } });
 }
 function applyRemote(d0){
@@ -752,9 +752,12 @@ function notifyFix(){
   tasks.forEach(function(t){ if(!t.done) t.notify=true; });
   ui.notifyMig=1; persist(); try{ render(); }catch(e){}
 }
+function stEmpty(s){ return !s||!((s.tasks&&s.tasks.length)||Object.keys(s.hours||{}).length||Object.keys((s.sched&&s.sched.weeks)||{}).length||Object.keys(s.spend||{}).length||(s.ideas&&s.ideas.length)); }
+function flushForce(){ saving=false; flush(); toast('Данните са възстановени към сървъра'); }
 function pull(first){
   if(!CFG.api||dirty||saving) return;
   api('/state').then(function(r){
+    if(r.state&&r.rev!==rev&&stEmpty(r.state)&&!stEmpty(snapshot())){ rev=r.rev; dirty=true; flushForce(); return; }
     if(r.state&&r.rev!==rev){ if(JSON.stringify(r.state)!==JSON.stringify(snapshot())) applyRemote(r.state); rev=r.rev; try{localStorage.setItem('zadachi.rev',String(rev));}catch(e){} }
     else if(!r.state&&first&&(tasks.length||Object.keys(hours).length)){ dirty=true; flush(); }
     planFix(); notifyFix();
