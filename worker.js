@@ -60,10 +60,29 @@ const minutesBetween = (a, b) => (Date.parse(a.replace(' ', 'T') + ':00Z') - Dat
 const yday = (d) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd - 1)).toISOString().slice(0, 10); };
 const spTxt = (st, d) => { const a = (st.spend && st.spend[d]) || []; const t = a.reduce((s, x) => s + x.amt, 0); return a.length ? ' (вече: ' + t.toFixed(2) + ' лв)' : ''; };
 
+
+// ---------- Устройства за известия (няколко) ----------
+async function getSubs(env) {
+  let subs = await kvJson(env, 'subs', []);
+  const old = await env.KV.get('sub');
+  if (old) { try { const o = JSON.parse(old); if (o && o.endpoint && !subs.some((s) => s.endpoint === o.endpoint)) subs.push(o); } catch (e) {} await env.KV.delete('sub'); await env.KV.put('subs', JSON.stringify(subs)); }
+  return subs;
+}
+async function sendAll(env, payload) {
+  const subs = await getSubs(env); let ok = false, last = 0; const keep = [];
+  for (const s of subs) {
+    let r; try { r = await sendPush(env, s, payload); } catch (e) { r = { status: 410 }; } last = r.status;
+    if (r.status === 404 || r.status === 410) continue;
+    keep.push(s); if (r.status < 300) ok = true;
+  }
+  if (keep.length !== subs.length) await env.KV.put('subs', JSON.stringify(keep));
+  return { ok, status: ok ? 201 : (last || 0), n: subs.length };
+}
+
 async function runDue(env) {
-  const [stRaw, subRaw, sentRaw] = await Promise.all([env.KV.get('state'), env.KV.get('sub'), env.KV.get('sent')]);
-  if (!stRaw || !subRaw) return { sent: 0 };
-  const state = JSON.parse(stRaw).state || {}, sub = JSON.parse(subRaw), sent = sentRaw ? JSON.parse(sentRaw) : {};
+  const [stRaw, sentRaw] = await Promise.all([env.KV.get('state'), env.KV.get('sent')]);
+  if (!stRaw || !(await getSubs(env)).length) return { sent: 0 };
+  const state = JSON.parse(stRaw).state || {}, sent = sentRaw ? JSON.parse(sentRaw) : {};
   const now = nowSofia(); let n = 0, changed = false;
   for (const t of state.tasks || []) {
     if (!t.notify || t.done || !t.date) continue;
@@ -73,9 +92,8 @@ async function runDue(env) {
     const late = minutesBetween(now, t.date + ' ' + tm);
     if (late < -1 || late > 90) continue; // 1 минута по-рано, за да дойде точно в часа
     const em = t.prio === 3 ? '🔴' : t.prio === 2 ? '🟡' : '🟢';
-    const r = await sendPush(env, sub, { title: '📋 Задачи', body: em + ' ' + tm + ' · ' + t.title, tag: t.id, url: './?t=' + encodeURIComponent(t.id) });
-    if (r.status === 404 || r.status === 410) { await env.KV.delete('sub'); break; }
-    if (r.status < 300) { sent[key] = Date.now(); n++; changed = true; }
+    const r = await sendAll(env, { title: '📋 Задачи', body: em + ' ' + tm + ' · ' + t.title, tag: t.id, url: './?t=' + encodeURIComponent(t.id) });
+    if (r.ok) { sent[key] = Date.now(); n++; changed = true; }
   }
   // Редовни напомняния (вместо тези от Reminders)
   const date = now.slice(0, 10), hhmm = now.slice(11), [yy, mm, dd] = date.split('-').map(Number);
@@ -102,9 +120,8 @@ async function runDue(env) {
     if (!r.on || sent[key]) continue;
     const late = minutesBetween(now, date + ' ' + r.at);
     if (late < -1 || late > 90) continue; // 1 минута по-рано, за да дойде точно в часа
-    const x = await sendPush(env, sub, { title: '📋 Задачи', body: r.body, tag: 'rule-' + r.id, url: './' });
-    if (x.status === 404 || x.status === 410) { await env.KV.delete('sub'); break; }
-    if (x.status < 300) { sent[key] = Date.now(); n++; changed = true; }
+    const x = await sendAll(env, { title: '📋 Задачи', body: r.body, tag: 'rule-' + r.id, url: './' });
+    if (x.ok) { sent[key] = Date.now(); n++; changed = true; }
   }
   for (const k of Object.keys(sent)) if (Date.now() - sent[k] > 7 * 86400000) { delete sent[k]; changed = true; }
   if (changed) await env.KV.put('sent', JSON.stringify(sent));
@@ -119,10 +136,7 @@ const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, header
 const okCode = (c) => typeof c === 'string' && /^[a-z0-9]{6,20}$/.test(c);
 const kvJson = async (env, k, d) => { const r = await env.KV.get(k); return r ? JSON.parse(r) : d; };
 async function pushOwner(env, payload) {
-  const raw = await env.KV.get('sub'); if (!raw) return null;
-  const r = await sendPush(env, JSON.parse(raw), payload);
-  if (r.status === 404 || r.status === 410) await env.KV.delete('sub');
-  return r.status;
+  const r = await sendAll(env, payload); return r.status;
 }
 async function personByCode(env, code) {
   if (!okCode(code)) return null;
@@ -301,13 +315,15 @@ export default {
       return json({ rev });
     }
     if (url.pathname === '/sub' && req.method === 'POST') {
-      await env.KV.put('sub', JSON.stringify(await req.json()));
-      return json({ ok: true });
+      const s = await req.json(); if (!s || !s.endpoint) return json({ error: 'bad' }, 400);
+      const subs = (await getSubs(env)).filter((x) => x.endpoint !== s.endpoint); subs.push(s);
+      await env.KV.put('subs', JSON.stringify(subs.slice(-6)));
+      return json({ ok: true, devices: Math.min(subs.length, 6) });
     }
     if (url.pathname === '/test' && req.method === 'POST') {
-      const raw = await env.KV.get('sub'); if (!raw) return json({ error: 'no subscription' }, 400);
-      const r = await sendPush(env, JSON.parse(raw), { title: '📋 Задачи', body: '🟢 Тест: известията работят', url: './' });
-      return json(r, r.status < 300 ? 200 : 502);
+      const r = await sendAll(env, { title: '📋 Задачи', body: '🟢 Тест: известията работят', url: './' });
+      if (!r.n) return json({ error: 'no subscription' }, 400);
+      return json(r, r.ok ? 200 : 502);
     }
     if (url.pathname === '/assist' && req.method === 'POST') {
       if (!env.AI) return json({ error: 'no ai' }, 501);

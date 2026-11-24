@@ -797,6 +797,12 @@ document.getElementById('impfile').addEventListener('change',function(){
 });
 document.getElementById('nbtn').addEventListener('click',pushEnable);
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
+/* Самоподновяване на известията: при отваряне пак записва това устройство */
+setTimeout(function(){ try{
+  if(!('Notification' in window)||Notification.permission!=='granted'||!('serviceWorker' in navigator)||!CFG.api||!CFG.token) return;
+  navigator.serviceWorker.ready.then(function(reg){ return reg.pushManager.getSubscription().then(function(s){ return s||reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToU8(VAPID_PUB)}); }); })
+  .then(function(s){ return api('/sub',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(s.toJSON())}); }).catch(function(){});
+}catch(e){} },4000);
 /* ---------- Показване ---------- */
 function fmtDate(s){
   var d=fromIso(s), t0=new Date(); t0=new Date(t0.getFullYear(),t0.getMonth(),t0.getDate());
