@@ -1773,13 +1773,13 @@ function schedPanel(){
           var cf=carConflict(p.id,i,v.c,v.h); if(cf) conflicts.push(p.name+' и '+cf.p.name+' · '+SDS[i]+' · '+(sCar(v.c)||{}).n);
           return '<button type="button" class="sc'+(cf||nocar?' sconf':'')+'" data-p="'+p.id+'" data-d="'+i+'" style="'+cellCss(v)+'" aria-label="'+esc(p.name+' '+n)+'">'+cellHtml(v)+'</button>'; }).join('');
     }).join('')+'</div>';
-  var legend='<div class="slg">'+sched.cars.map(function(c){return '<span style="background:'+c.c+';color:'+c.k+'">'+esc(c.n)+'</span>';}).join('')+'<span style="background:#666;color:#ddd">Почивен</span></div>';
+  var legend='<div class="slg">'+sched.cars.map(function(c){return '<span style="background:'+c.c+';color:'+c.k+'">'+esc(c.n)+(sEdit&&c.u?' <b data-cx="'+c.id+'" style="cursor:pointer;padding:0 4px">×</b>':'')+'</span>';}).join('')+'<span style="background:#666;color:#ddd">Почивен</span></div>';
   var hw=holWeek(sWeek), hbanner=hw.length?'<div class="shol">'+hw.map(function(x){ return '<span><b>'+SDS[x.i]+' '+fromIso(x.k).getDate()+'.'+pad(fromIso(x.k).getMonth()+1)+'</b> · '+esc(x.h.n)+(x.h.busy?' — очаквай повече хора':'')+'</span>'; }).join('')+'</div>':'';
   var cbanner=conflicts.length?'<div class="scw"><b>⚠ За проверка:</b>'+conflicts.map(function(x){return '<span>'+esc(x)+'</span>';}).join('')+'</div>':'';
   var wxbar='<div class="wxbar" aria-label="Времето във Варна"><div class="wxt">Варна</div>'+SDN.map(function(n,i){ var k=iso(addDays(mon,i)), w=WX[k], ic=w?wxIcon(w.c):null;
     return '<div class="wxd"'+(ic?' title="'+esc(ic[1])+'"':'')+'><span class="wd">'+SDS[i]+'</span>'+(w?'<b>'+ic[0]+'</b><span>'+w.hi+'°/'+w.lo+'°</span><span class="rn">💧'+(w.p!=null?w.p:'–')+'%</span>':'<span>—</span>')+'</div>'; }).join('')+'</div>';
   sh.innerHTML=head.replace('<h3>График</h3>','<h3>График</h3>'+wxbar)+hbanner+cbanner+'<div class="swrap">'+grid+'</div>'+legend+
-    '<div class="acts"><button class="btn" id="s-add" type="button" style="flex:1">+ Човек</button><button class="btn" id="s-edit" type="button" style="flex:1">'+(sEdit?'Готово с хората':'Махни човек')+'</button></div>'+
+    '<div class="acts"><button class="btn" id="s-add" type="button" style="flex:1">+ Човек</button><button class="btn" id="s-addcar" type="button" style="flex:1">+ Кола</button><button class="btn" id="s-edit" type="button" style="flex:1">'+(sEdit?'Готово':'Махни човек/кола')+'</button></div>'+
     '<div class="acts"><button class="btn" id="s-prev" type="button" style="flex:1">Копирай от миналата седмица</button></div>'+
     '<div class="acts big"><button class="btn pri" id="s-jpg" type="button" style="flex:1">Запази като снимка</button><button class="btn" id="s-copy" type="button" style="flex:1">Копирай снимка</button></div>'+
     '<div class="acts"><button class="btn" id="s-close" type="button" style="flex:1">Затвори</button></div>';
@@ -1790,6 +1790,16 @@ function schedPanel(){
   sh.querySelectorAll('.sn').forEach(function(inp){ inp.addEventListener('change',function(){ var p=sched.people.find(function(x){return x.id===inp.dataset.pn;}); if(p){ p.name=inp.value.trim()||p.name; persist(); } }); });
   sh.querySelectorAll('.sx').forEach(function(b){ b.onclick=function(){ var snap=clone(sched); sched.people=sched.people.filter(function(x){return x.id!==b.dataset.px;}); persist(); schedPanel(); toast('Човекът е махнат','Отмени',function(){ sched=snap; persist(); if(!$('#scrim').hidden) schedPanel(); }); }; });
   $('#s-add').onclick=function(){ sched.people.push({id:'p'+rid(),name:'Човек '+(sched.people.length+1)}); persist(); schedPanel(); var ins=document.querySelectorAll('.sn'); if(ins.length){ var li=ins[ins.length-1]; li.focus(); li.select(); } };
+  $('#s-addcar').onclick=function(){
+    var n=(prompt('Име на колата (напр. Дачия 4700):','')||'').trim(); if(!n) return;
+    var PAL=['#FFB74D','#F06292','#4DB6AC','#BA68C8','#FFD54F','#64B5F6','#A1887F','#81C784','#FF8A65','#90A4AE','#DCE775','#7986CB'];
+    var used=sched.cars.map(function(c){return (c.c||'').toLowerCase();}), col=PAL.find(function(x){return used.indexOf(x.toLowerCase())<0;})||PAL[sched.cars.length%PAL.length];
+    var rgb=[1,3,5].map(function(i){return parseInt(col.slice(i,i+2),16);}), lum=(0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2]);
+    sched.cars.push({id:'c'+rid(),n:n,s:n,c:col,k:lum>150?'#111':'#fff',u:1}); persist(); schedPanel(); toast('Колата е добавена');
+  };
+  sh.querySelectorAll('[data-cx]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); var id=b.dataset.cx, inUse=Object.keys(sched.weeks||{}).some(function(wk){ var w=sched.weeks[wk]; return Object.keys(w).some(function(p){ return (w[p]||[]).some(function(c){ return c&&c.c===id; }); }); });
+    if(inUse){ toast('Колата е използвана в графика и не може да се махне.'); return; }
+    var snap=clone(sched); sched.cars=sched.cars.filter(function(c){return c.id!==id;}); persist(); schedPanel(); toast('Колата е махната','Отмени',function(){ sched=snap; persist(); if(!$('#scrim').hidden) schedPanel(); }); }; });
   $('#s-edit').onclick=function(){ sEdit=!sEdit; schedPanel(); };
   $('#s-prev').onclick=function(){
     var pk2=iso(addDays(fromIso(sWeek),-7)), src=sched.weeks[pk2];
