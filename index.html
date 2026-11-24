@@ -752,7 +752,7 @@ function notifyFix(){
   tasks.forEach(function(t){ if(!t.done) t.notify=true; });
   ui.notifyMig=1; persist(); try{ render(); }catch(e){}
 }
-function stEmpty(s){ return !s||!((s.tasks&&s.tasks.length)||Object.keys(s.hours||{}).length||Object.keys((s.sched&&s.sched.weeks)||{}).length||Object.keys(s.spend||{}).length||(s.ideas&&s.ideas.length)); }
+function stEmpty(s){ return !s||!(((s.tasks&&s.tasks.length)>2)||Object.keys(s.hours||{}).length||Object.keys((s.sched&&s.sched.weeks)||{}).length||Object.keys(s.spend||{}).length||(s.ideas&&s.ideas.length)||Object.keys(s.hdone||{}).length||(s.farm&&Object.keys(s.farm).length>6)); }
 function flushForce(){ saving=false; flush(); toast('Данните са възстановени към сървъра'); }
 function pull(first){
   if(!CFG.api||dirty||saving) return;
